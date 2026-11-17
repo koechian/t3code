@@ -1,3 +1,4 @@
+import { useGT } from "gt-react";
 import type { UsageProviderKind } from "@t3tools/contracts";
 import { formatDayShort, formatTokens } from "@t3tools/shared/usageFormat";
 import type { DailyTotals } from "@t3tools/shared/usageMerge";
@@ -30,6 +31,7 @@ export function DitheredAreaChart({
   readonly days: readonly string[];
   readonly daily: readonly DailyTotals[];
 }) {
+  const gt = useGT();
   const byDay = new Map(daily.map((entry) => [entry.day, entry]));
   // A provider can have usage in the wider window but none in these days; leave it out.
   const totals = providers
@@ -57,12 +59,14 @@ export function DitheredAreaChart({
       <DitherCanvas
         cellSize={CHART_DOT}
         className="h-14 w-full"
-        label={`Daily tokens: ${totals
-          .map(
-            ({ provider, totalTokens }) =>
-              `${PROVIDER_PRESENTATION[provider].label} ${formatTokens(totalTokens)}`,
-          )
-          .join(", ")}`}
+        label={gt("Daily tokens: {totals}", {
+          totals: totals
+            .map(
+              ({ provider, totalTokens }) =>
+                `${PROVIDER_PRESENTATION[provider].label} ${formatTokens(totalTokens)}`,
+            )
+            .join(", "),
+        })}
         paint={paint}
       />
       <div aria-hidden className="flex justify-between text-3xs text-muted-foreground uppercase">
