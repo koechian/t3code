@@ -1335,13 +1335,15 @@ export function ChatSettingsPanel() {
           />
         </AdvancedSettings>
         <SettingsRow
-          {...searchableSetting("new-thread-usage-overview")}
-          description="Show provider limits, recent usage and activity below the composer on an empty chat."
+          {...setting("new-thread-usage-overview")}
+          description={gt(
+            "Show provider limits, recent usage and activity below the composer on an empty chat.",
+          )}
           resetAction={
             settings.newThreadUsageOverviewEnabled !==
             DEFAULT_UNIFIED_SETTINGS.newThreadUsageOverviewEnabled ? (
               <SettingResetButton
-                label="usage on new chats"
+                ariaLabel={gt("Reset to default")}
                 onClick={() =>
                   updateSettings({
                     newThreadUsageOverviewEnabled:
@@ -1357,7 +1359,7 @@ export function ChatSettingsPanel() {
               onCheckedChange={(checked) =>
                 updateSettings({ newThreadUsageOverviewEnabled: Boolean(checked) })
               }
-              aria-label="Show usage on new chats"
+              aria-label={gt("Show usage on new chats")}
             />
           }
         />
