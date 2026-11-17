@@ -832,6 +832,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("command menu dollar $ slash /")],
   },
   {
+    id: "new-thread-usage-overview",
+    title: "Show usage on new chats",
+    to: "/settings/chat",
+    searchTerms: ["usage limits activity heatmap tokens cost pool new thread draft empty"],
+  },
+  {
     id: "composer-rich-text",
     title: msg("Rich text composer"),
     to: "/settings/chat",
