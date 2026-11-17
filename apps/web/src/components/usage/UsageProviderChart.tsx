@@ -35,8 +35,6 @@ interface UsageProviderChartProps {
   readonly resolution: "day" | "hour";
   readonly timeZone: string;
   readonly hour12: boolean;
-  /** Height of the plot and its axis. Defaults to the Usage page's size. */
-  readonly heightClassName?: string;
 }
 
 export interface DayColumn {
@@ -293,7 +291,6 @@ function UsageChartPlot({
   loadingProviders,
   format,
   formatTooltipPeriod,
-  heightClassName,
   children,
 }: {
   readonly periods: readonly string[];
@@ -303,7 +300,6 @@ function UsageChartPlot({
   readonly loadingProviders: ReadonlySet<UsageProviderKind>;
   readonly format: (value: number) => string;
   readonly formatTooltipPeriod: (period: string) => string;
-  readonly heightClassName: string;
   readonly children: React.ReactNode;
 }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -367,7 +363,7 @@ function UsageChartPlot({
   return (
     <div
       ref={plotRef}
-      className={cn("relative flex-1", heightClassName)}
+      className="relative h-56 flex-1"
       onMouseMove={handleMove}
       onMouseLeave={() => {
         hoverPositionRef.current = null;
@@ -421,7 +417,6 @@ export function UsageProviderChart({
   resolution,
   timeZone,
   hour12,
-  heightClassName = "h-56",
 }: UsageProviderChartProps) {
   const gt = useGT();
   const locale = useLocale();
@@ -455,7 +450,7 @@ export function UsageProviderChart({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex gap-2">
-        <div aria-hidden className={cn("relative w-14 shrink-0", heightClassName)}>
+        <div aria-hidden className="relative h-56 w-14 shrink-0">
           {scale.labeled
             ? scale.ticks.map((tick) => (
                 <span
@@ -477,7 +472,6 @@ export function UsageProviderChart({
           loadingProviders={loadingProviders}
           format={format}
           formatTooltipPeriod={formatTooltipPeriod}
-          heightClassName={heightClassName}
         >
           {scale.ticks.map((tick) => {
             const y = toY(tick);
