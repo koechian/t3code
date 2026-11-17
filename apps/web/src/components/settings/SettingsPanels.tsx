@@ -570,6 +570,10 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.showSkillsInSlashMenu !== DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu
       ? [gt("Show skills in slash menu")]
       : []),
+    ...(settings.newThreadUsageOverviewEnabled !==
+    DEFAULT_UNIFIED_SETTINGS.newThreadUsageOverviewEnabled
+      ? ["Show usage on new chats"]
+      : []),
     ...(settings.composerRichTextEnabled !== DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled
       ? [gt("Rich text composer")]
       : []),
@@ -710,6 +714,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       diffLayout: DEFAULT_UNIFIED_SETTINGS.diffLayout,
       proactivePanelsEnabled: DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled,
       showSkillsInSlashMenu: DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu,
+      newThreadUsageOverviewEnabled: DEFAULT_UNIFIED_SETTINGS.newThreadUsageOverviewEnabled,
       composerRichTextEnabled: DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled,
       sendShortcut: DEFAULT_UNIFIED_SETTINGS.sendShortcut,
       followUpBehavior: DEFAULT_UNIFIED_SETTINGS.followUpBehavior,
@@ -1333,6 +1338,33 @@ export function ChatSettingsPanel() {
             }
           />
         </AdvancedSettings>
+        <SettingsRow
+          {...searchableSetting("new-thread-usage-overview")}
+          description="Show provider limits, recent usage and activity below the composer on an empty chat."
+          resetAction={
+            settings.newThreadUsageOverviewEnabled !==
+            DEFAULT_UNIFIED_SETTINGS.newThreadUsageOverviewEnabled ? (
+              <SettingResetButton
+                label="usage on new chats"
+                onClick={() =>
+                  updateSettings({
+                    newThreadUsageOverviewEnabled:
+                      DEFAULT_UNIFIED_SETTINGS.newThreadUsageOverviewEnabled,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.newThreadUsageOverviewEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ newThreadUsageOverviewEnabled: Boolean(checked) })
+              }
+              aria-label="Show usage on new chats"
+            />
+          }
+        />
       </SettingsSection>
 
       <SettingsSection id="follow-ups" title={gt("Follow-ups")}>

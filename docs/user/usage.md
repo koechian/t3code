@@ -6,6 +6,9 @@ desktop when the terminal is not focused. Customize `usage.open` in
 
 On mobile, choose **Usage** in the workspace navigation.
 
+On web and desktop, turn on **Settings → Chat → Show usage on new chats** to see your limits, the
+past 30 days of usage, and a 90-day activity grid below the composer whenever you start a chat.
+
 ## Understand your usage
 
 **Usage** combines Codex, Claude Code, Grok Build, OpenCode, Antigravity, Pi, Muse Code, and Cursor history
