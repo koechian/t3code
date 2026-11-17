@@ -828,9 +828,9 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "new-thread-usage-overview",
-    title: "Show usage on new chats",
+    title: msg("Show usage on new chats"),
     to: "/settings/chat",
-    searchTerms: ["usage limits activity heatmap tokens cost pool new thread draft empty"],
+    searchTerms: [msg("usage limits activity heatmap tokens cost pool new thread draft empty")],
   },
   {
     id: "composer-rich-text",
