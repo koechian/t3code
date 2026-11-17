@@ -4135,9 +4135,9 @@ export default function ChatView(props: ChatViewProps) {
                             <ComposerBannerStack items={composerBannerItems} detached />
                           ) : null}
                           {newThreadUsageOverviewEnabled ? (
-                            // Unlike a notice it is optional, so short windows drop it instead of
-                            // letting it lift the composer.
-                            <div className="pt-2 [@media(max-height:47rem)]:hidden">
+                            // Unlike a notice it is optional, so short and phone-width windows drop
+                            // it instead of letting it lift the composer.
+                            <div className="pt-2 [@media(max-height:47rem)]:hidden [@media(max-width:30rem)]:hidden">
                               <NewThreadUsageOverview />
                             </div>
                           ) : null}
