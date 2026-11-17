@@ -1,5 +1,4 @@
 import { pipe } from "effect/Function";
-import { ThreadDetailsMoreButton } from "./ThreadDetailsControl";
 import type {
   EnvironmentId,
   ScopedThreadRef,
@@ -13,8 +12,8 @@ import {
   threadPullRequestKeyOf,
   visibleThreadPullRequests,
 } from "@t3tools/client-runtime/thread-pull-requests";
-import { useMessages } from "gt-react";
-import { useState, type ComponentProps, type MouseEvent as ReactMouseEvent } from "react";
+import { T, useMessages } from "gt-react";
+import type { ComponentProps, MouseEvent as ReactMouseEvent } from "react";
 
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import {
@@ -80,6 +79,19 @@ function ThreadDetailsPrLinkRow({
   );
 }
 
+/** Matches the card's section headings, so the session's pull requests are easy to spot. */
+function ThreadDetailsPrListHeading({ count }: { count: number }) {
+  return (
+    <div className="flex min-h-8 min-w-0 items-center justify-between gap-2 px-2.5">
+      <h4 className="min-w-0 truncate text-2xs font-medium text-muted-foreground select-none">
+        <T>Pull requests</T>
+      </h4>
+      <span className="shrink-0 text-2xs text-muted-foreground tabular-nums">{count}</span>
+    </div>
+  );
+}
+
+/** Lists every pull request linked to the session; none are folded away. */
 function ThreadDetailsPrRows({
   threadRef,
   links,
@@ -92,7 +104,6 @@ function ThreadDetailsPrRows({
   currentLink: ThreadPullRequestLink | null;
   onOpenLink: (event: ReactMouseEvent<HTMLElement>, url: string) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const watch = useAtomCommand(threadEnvironment.watchPullRequest, { reportFailure: true });
   const stopWatching = (link: ThreadPullRequestLink | null) =>
     link?.watch === undefined
@@ -115,12 +126,12 @@ function ThreadDetailsPrRows({
       : pipe(visibleThreadPullRequests(links), resolveThreadPullRequestChains, pullRequestListLines)
           .map((line) => line.link)
           .filter((link) => threadPullRequestKeyOf(link) !== threadPullRequestKeyOf(currentLink));
-  if (rest.length === 0) return currentRow;
 
   return (
     <>
+      <ThreadDetailsPrListHeading count={rest.length + 1} />
       {currentRow}
-      {expanded ? (
+      {rest.length > 0 ? (
         <div data-thread-details-pr-list className="flex flex-col">
           {rest.map((link) => (
             <ThreadDetailsPrLinkRow
@@ -135,11 +146,6 @@ function ThreadDetailsPrRows({
           ))}
         </div>
       ) : null}
-      <ThreadDetailsMoreButton
-        expanded={expanded}
-        remaining={rest.length}
-        onToggle={() => setExpanded(!expanded)}
-      />
     </>
   );
 }

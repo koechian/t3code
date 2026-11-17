@@ -1,3 +1,4 @@
+import { T, msg, useGT, useMessages } from "gt-react";
 import { useAtomValue } from "@effect/atom-react";
 import {
   collectLimitAccounts,
@@ -31,11 +32,11 @@ const ACTIVITY_DAYS = 90;
 const TREND_DAYS = 30;
 const WEEKDAY_LABELS = [
   { key: "sun", label: "" },
-  { key: "mon", label: "Mon" },
+  { key: "mon", label: msg("Mon") },
   { key: "tue", label: "" },
-  { key: "wed", label: "Wed" },
+  { key: "wed", label: msg("Wed") },
   { key: "thu", label: "" },
-  { key: "fri", label: "Fri" },
+  { key: "fri", label: msg("Fri") },
   { key: "sat", label: "" },
 ] as const;
 const MONTH_FORMAT = new Intl.DateTimeFormat(undefined, { month: "short", timeZone: "UTC" });
@@ -63,6 +64,7 @@ function OverviewCard({
 }
 
 function LimitPoolCard({ pool, now }: { readonly pool: LimitPool; readonly now: number }) {
+  const gt = useGT();
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const window = tightestLimitWindow(pool);
   if (!window) return null;
@@ -88,14 +90,19 @@ function LimitPoolCard({ pool, now }: { readonly pool: LimitPool; readonly now: 
           {window.remainingPercent}%
         </span>
         <span className="text-xs text-muted-foreground">
-          left{pool.accounts.length > 1 ? ` across ${pool.accounts.length} accounts` : ""}
+          {pool.accounts.length > 1
+            ? gt("left across {count} accounts", { count: pool.accounts.length })
+            : gt("left")}
         </span>
         {window.pace ? <PaceIcon pace={window.pace} /> : null}
       </p>
       <DitheredMeter
         percent={window.remainingPercent}
         color={barColor(pool.driver)}
-        label={`${window.remainingPercent}% of the ${window.label.toLowerCase()} limit left`}
+        label={gt("{percent}% of the {window} limit left", {
+          percent: window.remainingPercent,
+          window: window.label.toLowerCase(),
+        })}
       />
       <p className="truncate text-xs text-muted-foreground tabular-nums">
         {nextRefill
@@ -104,19 +111,21 @@ function LimitPoolCard({ pool, now }: { readonly pool: LimitPool; readonly now: 
               timestampFormat,
               now,
             )}`
-          : "No refill scheduled"}
+          : gt("No refill scheduled")}
       </p>
     </OverviewCard>
   );
 }
 
 function ActivityHeatmap({ grid }: { readonly grid: ActivityGrid }) {
+  const gt = useGT();
+  const m = useMessages();
   return (
     <div className="flex gap-1.5 text-3xs text-muted-foreground">
       <div aria-hidden className="mt-3.5 grid grid-rows-7">
         {WEEKDAY_LABELS.map(({ key, label }) => (
           <span key={key} className="h-3 leading-3">
-            {label}
+            {label ? m(label) : ""}
           </span>
         ))}
       </div>
@@ -134,7 +143,10 @@ function ActivityHeatmap({ grid }: { readonly grid: ActivityGrid }) {
         </div>
         <DitheredHeatmap
           grid={grid}
-          label={`${formatTokens(grid.totalTokens)} tokens in the last ${ACTIVITY_DAYS} days`}
+          label={gt("{tokens} tokens in the last {days} days", {
+            tokens: formatTokens(grid.totalTokens),
+            days: ACTIVITY_DAYS,
+          })}
         />
       </div>
     </div>
@@ -148,6 +160,7 @@ function sumCost(days: readonly string[], daily: readonly DailyTotals[]): number
 
 /** Limits, recent usage and activity under the empty composer. */
 export function NewThreadUsageOverview() {
+  const gt = useGT();
   const [now] = useState(() => Date.now());
   // useUsage compares the window by identity, so it must stay stable across renders.
   const [usageWindow] = useState(() => makeWindow(ACTIVITY_DAYS));
@@ -183,11 +196,14 @@ export function NewThreadUsageOverview() {
                 to="/usage"
                 className="inline-flex items-center gap-0.5 transition-colors hover:text-muted-foreground"
               >
-                Usage
+                <T>Usage</T>
                 <ArrowUpRightIcon className="size-3" aria-hidden />
               </Link>
             }
-            aside={`${formatUsd(sumCost(trendDays, merged.daily))} · ${TREND_DAYS} days`}
+            aside={gt("{cost} · {days} days", {
+              cost: formatUsd(sumCost(trendDays, merged.daily)),
+              days: TREND_DAYS,
+            })}
           >
             <DitheredAreaChart providers={providers} days={trendDays} daily={merged.daily} />
           </OverviewCard>
@@ -205,9 +221,13 @@ function ActivityCard({
   readonly days: readonly string[];
   readonly daily: readonly DailyTotals[];
 }) {
+  const gt = useGT();
   const grid = buildActivityGrid(days, daily);
   return (
-    <OverviewCard title="Activity" aside={`${formatTokens(grid.totalTokens)} tokens`}>
+    <OverviewCard
+      title={gt("Activity")}
+      aside={gt("{tokens} tokens", { tokens: formatTokens(grid.totalTokens) })}
+    >
       <ActivityHeatmap grid={grid} />
     </OverviewCard>
   );
