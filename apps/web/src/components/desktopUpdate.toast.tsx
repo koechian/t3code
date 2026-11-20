@@ -46,6 +46,24 @@ function ReleaseNotesLink({
   );
 }
 
+/** Confirms, on the first launch after an update, which version is now running. */
+export function showDesktopUpdateInstalledToast(
+  shell: DesktopUpdateShell | undefined,
+  version: string,
+): void {
+  const releaseUrl = getDesktopUpdateReleaseUrl(version);
+  toastManager.add({
+    type: "success",
+    title: m(msg("Updated to {version}", { version })),
+    description: (
+      <>
+        <T>The update installed and this version is now running.</T>
+        {shell && releaseUrl ? <ReleaseNotesLink releaseUrl={releaseUrl} shell={shell} /> : null}
+      </>
+    ),
+  });
+}
+
 export function showDesktopUpdateDownloadedToast(
   shell: DesktopUpdateShell,
   state: DesktopUpdateState,
