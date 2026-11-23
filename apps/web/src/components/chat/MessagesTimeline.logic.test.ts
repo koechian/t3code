@@ -37,6 +37,7 @@ import {
   resolveTimelineMinimapHitStrip,
   type MessagesTimelineRow,
   workEntryDisplayLabel,
+  workEntryIsVisibleInGroup,
   workEntryReadOutput,
 } from "./MessagesTimeline.logic";
 import { workEntryIconName } from "./TimelineWorkEntryRow.logic";
@@ -575,6 +576,74 @@ describe("deriveMessagesTimelineRows", () => {
       expect(workEntryDisplayLabel(notice.entry, undefined)).toBe(message);
     },
   );
+
+  it("folds a turn's MCP sign-in notices into one expandable row", () => {
+    const fixture = makeStreamingTimelineFixture();
+    const signInNotice = (server: string, ordinal: number): OrchestrationV2ProjectedTurnItem => {
+      const id = TurnItemId.make(`mcp-sign-in-${server}`);
+      const message = `The ${server} MCP server needs a sign-in before Claude can use it.`;
+      return {
+        ...fixture.visibleTurnItems[0]!,
+        sourceItemId: id,
+        item: {
+          id,
+          threadId: fixture.threadId,
+          runId: fixture.runId,
+          nodeId: null,
+          providerThreadId: null,
+          providerTurnId: null,
+          nativeItemRef: null,
+          parentItemId: null,
+          ordinal,
+          startedAt: DateTime.makeUnsafe(fixture.time(1)),
+          completedAt: DateTime.makeUnsafe(fixture.time(1)),
+          updatedAt: DateTime.makeUnsafe(fixture.time(1)),
+          type: "system_notice",
+          message,
+          title: `MCP server ${server} needs a sign-in`,
+          mcpSignIn: { server },
+          status: "completed",
+        },
+      };
+    };
+    const entries = (servers: ReadonlyArray<string>) =>
+      deriveTimelineEntriesFromVisibleTurnItems({
+        visibleTurnItems: servers.map((server, index) => signInNotice(server, index + 1)),
+        optimisticMessages: [],
+      });
+    const input = {
+      isWorking: false,
+      turnDiffSummaries: [],
+      supportsConversationRollback: false,
+    };
+    const timelineEntries = entries(["ahrefs", "kernel", "fold"]);
+
+    const collapsed = deriveMessagesTimelineRows({ ...input, timelineEntries });
+    expect(collapsed).toHaveLength(1);
+    const header = collapsed[0];
+    if (header?.kind !== "work-toggle") throw new Error("Expected one sign-in header");
+    expect(header.notice).toBe("mcp-sign-in");
+    expect(header.expanded).toBe(false);
+    expect(header.summary).toBe("3 MCP servers need a sign-in: ahrefs, kernel, fold");
+
+    const expanded = deriveMessagesTimelineRows({
+      ...input,
+      timelineEntries,
+      expandedWorkGroupIds: new Set([header.groupId]),
+    });
+    expect(expanded.map((row) => row.kind)).toEqual(["work-toggle", "work"]);
+    const details = expanded[1];
+    if (details?.kind !== "work") throw new Error("Expected the sign-in details row");
+    expect(details.groupedEntries.map((entry) => entry.id)).toEqual(
+      timelineEntries.map((entry) => entry.id),
+    );
+    expect(details.groupedEntries.every((entry) => workEntryIsVisibleInGroup(entry, true))).toBe(
+      true,
+    );
+
+    const single = deriveMessagesTimelineRows({ ...input, timelineEntries: entries(["ahrefs"]) });
+    expect(single.map((row) => row.kind)).toEqual(["work"]);
+  });
 
   it.each([false, true])(
     "gives live compaction the activity slot and restores Thinking (runless: %s)",

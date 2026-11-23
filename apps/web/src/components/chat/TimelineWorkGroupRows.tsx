@@ -726,9 +726,14 @@ export function WorkGroupToggleTimelineRow({
   return (
     <WorkGroupHeader
       label={row.summary}
-      iconName={row.toolSurface ?? toolGroupSummaryIconName(row.summaryKind)}
+      iconName={
+        row.notice === undefined
+          ? (row.toolSurface ?? toolGroupSummaryIconName(row.summaryKind))
+          : "circle-alert"
+      }
       toolIcon={row.toolIcon}
       failed={row.hasFailure}
+      warning={row.notice !== undefined}
       expanded={row.expanded}
       createdAt={row.createdAt}
       timestampFormat={ctx.timestampFormat}
@@ -742,6 +747,8 @@ function WorkGroupHeader(props: {
   iconName: WorkEntryIconName;
   toolIcon?: ToolActivityIcon | undefined;
   failed?: boolean | undefined;
+  /** Notices that need the user, such as sign-ins, take the warning colour. */
+  warning?: boolean | undefined;
   expanded: boolean;
   createdAt: string;
   timestampFormat: TimestampFormat;
@@ -759,11 +766,18 @@ function WorkGroupHeader(props: {
         <ToolActivityIconView
           icon={props.toolIcon}
           fallbackName={props.iconName}
-          className="size-4 shrink-0 stroke-2 text-icon-muted"
-          muted
+          className={cn(
+            "size-4 shrink-0 stroke-2",
+            props.warning ? "text-warning" : "text-icon-muted",
+          )}
+          muted={!props.warning}
         />
       }
-      label={<span className="block truncate">{props.label}</span>}
+      label={
+        <span className={cn("block truncate", props.warning && "font-medium text-warning")}>
+          {props.label}
+        </span>
+      }
       trailing={
         <TimelineRowTimestamp createdAt={props.createdAt} timestampFormat={props.timestampFormat} />
       }
