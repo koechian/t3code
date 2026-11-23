@@ -599,6 +599,8 @@ type MessagesTimelineRowContent =
       toolSurface?: WorkLogEntry["toolSurface"];
       toolIcon?: WorkLogEntry["toolIcon"];
       hasFailure: boolean;
+      /** Set when the group folds notices together instead of tool calls. */
+      notice?: "mcp-sign-in";
     }
   | {
       /** Images the agent opened in the tool group above, kept visible while the group is collapsed. */
@@ -725,6 +727,60 @@ function expandedWorkGroupRow(
     groupedEntries,
     isExpandedToolGroup: true,
   };
+}
+
+function mcpSignInServer(entry: WorkLogEntry): string | null {
+  const payload = entry.structuredPayload;
+  return entry.itemType === "system_notice" &&
+    payload?.type === "system_notice" &&
+    payload.mcpSignIn !== undefined
+    ? payload.mcpSignIn.server
+    : null;
+}
+
+/** The MCP sign-in notices in a row from `start`, which a turn emits one per server. */
+function consecutiveMcpSignInNotices(
+  timelineEntries: ReadonlyArray<TimelineEntry>,
+  start: number,
+): WorkLogEntry[] {
+  const notices: WorkLogEntry[] = [];
+  for (let index = start; index < timelineEntries.length; index += 1) {
+    const entry = timelineEntries[index];
+    if (entry?.kind !== "work" || mcpSignInServer(entry.entry) === null) break;
+    notices.push(entry.entry);
+  }
+  return notices;
+}
+
+/** Folds several sign-in notices into one header that expands to each server's sign-in row. */
+function mcpSignInNoticeRows(
+  anchor: Extract<TimelineEntry, { kind: "work" }>,
+  notices: WorkLogEntry[],
+  expandedWorkGroupIds: ReadonlySet<string> | undefined,
+  resolve: MessageResolver,
+): MessagesTimelineRow[] {
+  const groupId = workGroupId(anchor.id);
+  const expanded = expandedWorkGroupIds?.has(groupId) ?? false;
+  const servers = notices.map(mcpSignInServer).filter((server) => server !== null);
+  const header: MessagesTimelineRow = {
+    kind: "work-toggle",
+    id: `work-toggle:${anchor.id}`,
+    createdAt: anchor.createdAt,
+    runId: anchor.entry.runId ?? null,
+    groupId,
+    hiddenCount: notices.length,
+    expanded,
+    summary: resolve(
+      msg("{count} MCP servers need a sign-in: {servers}", {
+        count: notices.length,
+        servers: servers.join(", "),
+      }),
+    ),
+    summaryKind: "other",
+    hasFailure: false,
+    notice: "mcp-sign-in",
+  };
+  return expanded ? [header, expandedWorkGroupRow(groupId, anchor.createdAt, notices)] : [header];
 }
 
 function viewedImagesRows(
@@ -2085,6 +2141,19 @@ export function deriveMessagesTimelineRows(
         timelineEntry.entry.itemType === "todo_list" ||
         timelineEntry.entry.questionAnswer !== undefined
       ) {
+        const signInNotices = consecutiveMcpSignInNotices(timelineEntries, index);
+        if (signInNotices.length > 1) {
+          nextRows.push(
+            ...mcpSignInNoticeRows(
+              timelineEntry,
+              signInNotices,
+              input.expandedWorkGroupIds,
+              resolve,
+            ),
+          );
+          index += signInNotices.length - 1;
+          continue;
+        }
         nextRows.push({
           kind: "work",
           id: timelineEntry.id,
