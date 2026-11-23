@@ -848,6 +848,58 @@ function IssueSurfaceIcon({
   );
 }
 
+/**
+ * The newest known state of a pull request tab. A thread's saved link snapshot can be taken while
+ * the pull request was still open, so the tab always asks for the live detail and lets the newest
+ * answer win; the snapshot and the list seed only stand in until that answer arrives.
+ */
+function usePullRequestTabStatus(
+  surface: Extract<RightPanelSurface, { kind: "pull-request" }>,
+  environmentId: EnvironmentId | null,
+  seed: PullRequestTabStatusSeed | undefined,
+) {
+  const projects = useProjects();
+  const threads = useThreadShells();
+  const configs = useServerConfigs();
+  const project = projects.find(
+    (entry) => entry.environmentId === environmentId && entry.id === surface.projectId,
+  );
+  const identity = project?.repositoryIdentity;
+  const host =
+    surface.host ??
+    (identity?.provider
+      ? sourceControlClients.changeRequestHost(identity, identity.provider)
+      : null);
+  const capabilities =
+    environmentId === null ? undefined : configs.get(environmentId)?.environment.capabilities;
+  const linkedSnapshot =
+    capabilities === undefined
+      ? null
+      : (resolvePullRequestTabLink(threads, environmentId, host, surface)?.snapshot ?? null);
+  const detail = useEnvironmentQuery(
+    environmentId === null || capabilities === undefined
+      ? null
+      : pullRequestEnvironment.detail({
+          environmentId,
+          input: {
+            projectId: surface.projectId as ProjectId,
+            ...(surface.host === undefined ? {} : { host: surface.host }),
+            repository: surface.repository,
+            number: surface.number,
+            allowStale: false,
+          },
+        }),
+  ).data;
+  const sharedSummary = useSharedPullRequestSummary(environmentId, {
+    projectId: surface.projectId as ProjectId,
+    ...(host === null ? {} : { host }),
+    repository: surface.repository,
+    number: surface.number,
+  });
+  const status = newestPullRequestSummary(detail, sharedSummary) ?? linkedSnapshot ?? seed ?? null;
+  return { status, detail };
+}
+
 function PullRequestSurfaceIcon({
   surface,
   environmentId,
@@ -859,49 +911,7 @@ function PullRequestSurfaceIcon({
 }) {
   const resolvedEnvironmentId =
     (surface.environmentId as EnvironmentId | undefined) ?? environmentId;
-  const projects = useProjects();
-  const threads = useThreadShells();
-  const project = projects.find(
-    (entry) => entry.environmentId === resolvedEnvironmentId && entry.id === surface.projectId,
-  );
-  const identity = project?.repositoryIdentity;
-  const host =
-    surface.host ??
-    (identity?.provider
-      ? sourceControlClients.changeRequestHost(identity, identity.provider)
-      : null);
-  const configs = useServerConfigs();
-  const capabilities =
-    resolvedEnvironmentId === null
-      ? undefined
-      : configs.get(resolvedEnvironmentId)?.environment.capabilities;
-  const linkedSnapshot =
-    capabilities !== undefined
-      ? (resolvePullRequestTabLink(threads, resolvedEnvironmentId, host, surface)?.snapshot ?? null)
-      : null;
-  const detail = useEnvironmentQuery(
-    resolvedEnvironmentId === null || capabilities === undefined || linkedSnapshot !== null
-      ? null
-      : pullRequestEnvironment.detail({
-          environmentId: resolvedEnvironmentId,
-          input: {
-            projectId: surface.projectId as ProjectId,
-            ...(capabilities !== undefined && surface.host !== undefined
-              ? { host: surface.host }
-              : {}),
-            repository: surface.repository,
-            number: surface.number,
-            allowStale: false,
-          },
-        }),
-  ).data;
-  const reference = {
-    projectId: surface.projectId as ProjectId,
-    repository: surface.repository,
-    number: surface.number,
-  };
-  const sharedSummary = useSharedPullRequestSummary(resolvedEnvironmentId, reference);
-  const status = linkedSnapshot ?? newestPullRequestSummary(detail, sharedSummary) ?? seed ?? null;
+  const { status, detail } = usePullRequestTabStatus(surface, resolvedEnvironmentId, seed);
   if (status === null) {
     return <PullRequestGlyph.pullRequest className="size-3 shrink-0 text-muted-foreground" />;
   }
