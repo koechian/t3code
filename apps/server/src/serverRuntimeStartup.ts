@@ -171,11 +171,12 @@ const recordStartupHeartbeat = Effect.gen(function* () {
     ),
   );
 
-  yield* analytics.record("server.boot.heartbeat", {
+  const recorded = yield* analytics.record("server.boot.heartbeat", {
     threadCount,
     projectCount,
   });
-  yield* analytics.recordOwners(yield* getServerOwners, "server");
+  // Resolve server owners only when analytics accepts events.
+  if (recorded) yield* analytics.recordOwners(yield* getServerOwners, "server");
 });
 
 const getAutoBootstrapThreadModelSelection = (): ModelSelection => ({
