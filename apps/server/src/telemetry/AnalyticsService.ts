@@ -1,6 +1,6 @@
 // T3 ingest retains events and deduplicates retries by UUID.
 import * as HostProcess from "@t3tools/shared/HostProcess";
-import { isCiEnvironment, isDoNotTrackSet } from "@t3tools/shared/otelEnvironment";
+import { isDoNotTrackSet } from "@t3tools/shared/otelEnvironment";
 import type { ClientOs } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
@@ -74,7 +74,9 @@ const TelemetryEnvConfig = Config.all({
   ingestHost: Config.String("T3CODE_TELEMETRY_HOST").pipe(
     Config.withDefault("https://ingest.t3.codes"),
   ),
-  enabled: Config.Boolean("T3CODE_TELEMETRY_ENABLED").pipe(Config.option),
+  // local-build: product analytics is opt-in. Nothing is recorded or sent unless
+  // T3CODE_TELEMETRY_ENABLED=true is set where the server starts.
+  enabled: Config.Boolean("T3CODE_TELEMETRY_ENABLED").pipe(Config.withDefault(false)),
   flushBatchSize: Config.Number("T3CODE_TELEMETRY_FLUSH_BATCH_SIZE").pipe(Config.withDefault(20)),
   maxBufferedEvents: Config.Number("T3CODE_TELEMETRY_MAX_BUFFERED_EVENTS").pipe(
     Config.withDefault(1_000),
@@ -152,8 +154,7 @@ export const make = Effect.gen(function* () {
   const telemetryConfig = yield* TelemetryEnvConfig;
   const hostEnvironment = yield* HostProcess.Environment;
   const awaitingShellConsent = hostEnvironment.T3CODE_DESKTOP_SHELL_DISCOVERY_PENDING === "1";
-  const enabledByDefault = !isCiEnvironment(hostEnvironment);
-  const enabledAtStartup = Option.getOrElse(telemetryConfig.enabled, () => enabledByDefault);
+  const enabledAtStartup = telemetryConfig.enabled;
   // A managed policy can switch analytics off over the environment, never on.
   const policyAllows =
     ManagedPolicy.deniedBy(yield* ManagedPolicy.ManagedPolicy, "telemetry") === undefined;
@@ -166,7 +167,7 @@ export const make = Effect.gen(function* () {
       return Effect.succeed(false);
     const preference = hostEnvironment.T3CODE_TELEMETRY_ENABLED;
     return Config.Boolean("T3CODE_TELEMETRY_ENABLED").pipe(
-      Config.withDefault(enabledByDefault),
+      Config.withDefault(false),
       Effect.provideService(
         ConfigProvider.ConfigProvider,
         ConfigProvider.fromEnv({
@@ -178,7 +179,11 @@ export const make = Effect.gen(function* () {
   });
   const httpClient = yield* HttpClient.HttpClient;
   const serverConfig = yield* ServerConfig.ServerConfig;
-  const { distinctId, installId } = yield* getTelemetryIdentity;
+  // Resolve the install identity only when analytics was explicitly enabled.
+  const { distinctId, installId } =
+    telemetryConfig.enabled && policyAllows
+      ? yield* getTelemetryIdentity
+      : { distinctId: null, installId: null };
   const crypto = yield* SecureRandom.SecureRandom;
   const bufferRef = yield* Ref.make<ReadonlyArray<BufferedAnalyticsEvent>>([]);
   const deliveryRef = yield* Ref.make<DeliveryState>({
