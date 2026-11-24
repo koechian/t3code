@@ -42,8 +42,6 @@ count as product use.
 - Delivery ([`AnalyticsService.ts`](../../apps/server/src/telemetry/AnalyticsService.ts)) attaches a
   UUID per event, backs off on failure, and drops batches after bounded retries so a stuck batch
   cannot loop forever.
-- Dev-runner servers and servers on CI runners disable telemetry (and relay tracing) by default so
-  they do not inflate install counts. CI detection is `isCiEnvironment` in
-  [`otelEnvironment.ts`](../../packages/shared/src/otelEnvironment.ts). An explicit
-  `T3CODE_TELEMETRY_ENABLED=true` overrides both defaults; a managed policy that denies telemetry
-  overrides everything.
+- This local build disables product telemetry and relay tracing by default in every environment.
+  An explicit `T3CODE_TELEMETRY_ENABLED=true` enables them; `DO_NOT_TRACK` and a managed policy
+  that denies telemetry still override that opt-in.
