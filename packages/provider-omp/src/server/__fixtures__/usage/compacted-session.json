@@ -1,0 +1,320 @@
+[
+  {
+    "type": "title",
+    "v": 1,
+    "title": "",
+    "updatedAt": "2026-11-25T08:42:21.969Z"
+  },
+  {
+    "type": "session",
+    "version": 3,
+    "id": "01a211de-c591-7351-a44b-01a135831257",
+    "timestamp": "2026-11-25T08:42:21.969Z",
+    "cwd": "/workspace"
+  },
+  {
+    "type": "model_change",
+    "id": "40cfbdaf",
+    "parentId": null,
+    "timestamp": "2026-11-25T08:42:22.165Z",
+    "runtime": {
+      "version": "19.1.1"
+    },
+    "model": "anthropic/claude-haiku-5-5",
+    "resolvedModelIsFallback": false
+  },
+  {
+    "type": "thinking_level_change",
+    "id": "a213b9db",
+    "parentId": "40cfbdaf",
+    "timestamp": "2026-11-25T08:42:22.166Z",
+    "runtime": {
+      "version": "19.1.1"
+    },
+    "thinkingLevel": "off",
+    "configured": null
+  },
+  {
+    "type": "message",
+    "id": "caaf02c6",
+    "parentId": "e174c3b9",
+    "timestamp": "2026-11-25T08:42:22.256Z",
+    "runtime": {
+      "version": "19.1.1"
+    },
+    "message": {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Reply with the single word: pong"
+        }
+      ],
+      "timestamp": 1795596142242
+    }
+  },
+  {
+    "type": "message",
+    "id": "ae7d8357",
+    "parentId": "1dbe1095",
+    "timestamp": "2026-11-25T08:42:23.651Z",
+    "runtime": {
+      "version": "19.1.1"
+    },
+    "message": {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "pong"
+        }
+      ],
+      "api": "anthropic-messages",
+      "provider": "anthropic",
+      "model": "claude-haiku-5-5",
+      "usage": {
+        "input": 4,
+        "output": 4,
+        "cacheRead": 12651,
+        "cacheWrite": 0,
+        "totalTokens": 12659,
+        "cost": {
+          "input": 4.0000000000000003e-7,
+          "output": 2e-6,
+          "cacheRead": 0.00012651,
+          "cacheWrite": 0,
+          "total": 0.00012891
+        }
+      },
+      "stopReason": "stop",
+      "timestamp": 1795596142257
+    }
+  },
+  {
+    "type": "message",
+    "id": "3ff5c00e",
+    "parentId": "d3f6326a",
+    "timestamp": "2026-11-25T08:42:23.669Z",
+    "runtime": {
+      "version": "19.1.1"
+    },
+    "message": {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Now reply with the single word: ping"
+        }
+      ],
+      "timestamp": 1795596143663
+    }
+  },
+  {
+    "type": "message",
+    "id": "8b62c854",
+    "parentId": "3ff5c00e",
+    "timestamp": "2026-11-25T08:42:24.410Z",
+    "runtime": {
+      "version": "19.1.1"
+    },
+    "message": {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "ping"
+        }
+      ],
+      "api": "anthropic-messages",
+      "provider": "anthropic",
+      "model": "claude-haiku-5-5",
+      "usage": {
+        "input": 4,
+        "output": 4,
+        "cacheRead": 12670,
+        "cacheWrite": 0,
+        "totalTokens": 12678,
+        "cost": {
+          "input": 4.0000000000000003e-7,
+          "output": 2e-6,
+          "cacheRead": 0.0001267,
+          "cacheWrite": 0,
+          "total": 0.0001291
+        }
+      },
+      "stopReason": "stop",
+      "timestamp": 1795596143670
+    }
+  },
+  {
+    "type": "model_usage",
+    "id": "b8fff9ed",
+    "parentId": "8b62c854",
+    "timestamp": "2026-11-25T08:42:26.545Z",
+    "runtime": {
+      "version": "19.1.1"
+    },
+    "purpose": "compaction:remote",
+    "api": "anthropic-messages",
+    "provider": "anthropic",
+    "model": "claude-haiku-5-5",
+    "usage": {
+      "input": 487,
+      "output": 228,
+      "cacheRead": 12670,
+      "cacheWrite": 0,
+      "totalTokens": 13385,
+      "cost": {
+        "input": 4.8700000000000005e-5,
+        "output": 0.00011399999999999999,
+        "cacheRead": 0.0001267,
+        "cacheWrite": 0,
+        "total": 0.0002894
+      }
+    },
+    "stopReason": "stop",
+    "duration": 2108.379375,
+    "ttft": 2101.0892499999995
+  },
+  {
+    "type": "compaction",
+    "id": "f9fd96bb",
+    "parentId": "b8fff9ed",
+    "timestamp": "2026-11-25T08:42:26.545Z",
+    "runtime": {
+      "version": "19.1.1"
+    },
+    "summary": "## Goal\n- (trimmed)",
+    "shortSummary": "Remote compaction",
+    "firstKeptEntryId": "8b62c854",
+    "tokensBefore": 12678,
+    "tokensAfter": 11597,
+    "method": "remote",
+    "details": {
+      "readFiles": [],
+      "modifiedFiles": []
+    },
+    "fromExtension": false,
+    "preserveData": {
+      "anthropicCompaction": {
+        "provider": "anthropic",
+        "content": "## Goal\n- Exchange trivial single-word replies (\"pong\", \"ping\") with the user.\n\n## Constraints & Preferences\n- Reply with only the requested word when asked.\n\n## Progress\n\n### Done\n- [x] Replied \"pong\" to the first request.\n\n### In Progress\n- [ ] None.\n\n### Blocked\n- None.\n\n## Key Decisions\n- None.\n\n## Next Steps\n1. Await the next user request.\n\n## Critical Context\n- Last user request: reply with the single word \"ping\". This was answered with the word \"ping\" in the next turn (not yet reflected in this summary's history; treat as completed).\n\n## Additional Notes\n- No files, repository changes, or tool calls were involved in this session.",
+        "signature": "CAIS/wkKHggUGALyARdjb21wYWN0aW9uX3NpZ25hdHVyZV92MRIM7BNf/OE17VgD3Mt2Ggx9n45nEn6Vv2rqscwiMI2OJk2KRBbK0UXnRgRFlT0BO0VjdnllnhVdZAEDEnAcTZqPHLNsnlve2UuUe25gyyqOCT+YKT1E5wBr7vxMiuZdfOcL/D8HENQwEQr8zwxKg8/dd1EcjkdycpG7b3UO9HJ8f9or8azH2NZBsVzp61bLRxtziwhu4iLkVdJ5o8AREktZxY565ZolUdOdMndZtLYs1mmC+SkRCAsFbk0NELTpO/oF71PDXjaaoDMWxm37s+Mc+ADBkO/nXMjSBGfJkd5FLi7pd0rzXTwFQ2aXKBor1AuF1aetSXQLqR+GZlxbDYobwcXEPerXRXmiLFc8/IniUOOvnnV7kI6GXib+iYcWfYwMGmriGR03dg2/HD6j1Grp/SRg79hKqA+DpbDN94hAmcFcrz8l1nSdWtZu7C2b7Z8IcS1ylKH3+7pvbHHuUe/wqC0Kcs7+T3vH51sty4xlYPv2PJyeIgcTZdqSCpk9vqwbdHrKVFD1vn5ROkqxDjDokvSZxk7/ebpzN7h9H5krwRMLFbMxXBpzlDaKv68nEDeXSI8ygJlfSzSyUhNYjXbMbJ7c2bEeEUOLV5ylGUj32pTZYhwgsFpIvv+fq6RWbVz5FGFemdbaMz43a41+vfhsCaCF6K6aTXEUcoj+a0mf53GMGa4PZu1EDttnHyi8gfpMrlp/8HioDoJi1bmVkAMxfAqSS6thxjNnU0gjrnmX7yIEUvAQ1V+omdW2Zkog8wGQYfx7thYnFG2/0SReE/nIVl4omHpHe3yUxiTwN0L4XA6MQSZLBWBeFAsK5hbBKY1I42j+iMHNGBVMOfzOo6RrtvlKHq16OExZQWAuO9cp3Hfp2uAPVtdVkm4sj2sTrVDEPDCUZH1xj4PHZlHNIIjEZ3DRKyn3OgEHWVmVTVAnxPUL+zn0FF20LtfIf3JNARI1d9h7EbN0uvNyeiXay6L93qoa0BN7BGjOvluc4T/9Gt86zXuPLWtmQmgnPF1HeiLCcPlt+TnLoQOaHGtlF6vV+wB3skttV1g1rA12sFuUkesuMDl7aSPaEXh2j4VW42sIyKWdLh3AWxDa90ckqZeCNcANDSQus0+1SnY55rUSIL+DpSbgdq6sa5bYvMb3P75hMVScgamMwT7bAjcBnp88+qFMdczSZh3DQVf1L4IlFBAM71XLkfw4xMU5Ibg5gzNYrH26pqI1j0vpn2RfL15QIEYr7MzX7QnwHUB5cWPuvxVM/THs7qMCJapmKt5RUZKKJQzR3QKkCL6WZHvR0k5LcyP/gSdLExUm4plzhsioNcFLUjHkVowcRwTwKlGvMcAs6iGNmzb5KmZ0zkzbLdABTyjBNJbB5kH+8SBAgptBAVwwQ8vBiv4nk/4qpftG5MMPfd8Cu4/nWTyiHRgamSCxX7m0l6WibqHpKNp/tolxdTq+LUo8A3Gt3TiOj1rNjr2VC/xWpfvNBj1vBK+kxsy5tfFDLXUIsOTld/O7o6bGubZBEfL8SLqjWE4nfa30G4h7RBTP8sUnFkI91UF4HEIukUOyA2g4ji7A1h/FUhDEC1LcEdFI/kNavElrJfoSbMnDrz8+5jCR/KAXcaD7AnBec3kxLN1jC87O5ng9Tl9UCEfiR5/E141WrplEpB7RGAs=",
+        "exactTail": true,
+        "model": "claude-haiku-5-5",
+        "usedTokens": 13157
+      }
+    }
+  },
+  {
+    "type": "message",
+    "id": "ec9399a2",
+    "parentId": "c2d1a942",
+    "timestamp": "2026-11-25T08:42:27.054Z",
+    "runtime": {
+      "version": "19.1.1"
+    },
+    "message": {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Reply with the single word: pong"
+        }
+      ],
+      "timestamp": 1795596147050
+    }
+  },
+  {
+    "type": "message",
+    "id": "f8f3fd43",
+    "parentId": "ec9399a2",
+    "timestamp": "2026-11-25T08:42:28.684Z",
+    "runtime": {
+      "version": "19.1.1"
+    },
+    "message": {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "pong"
+        }
+      ],
+      "api": "anthropic-messages",
+      "provider": "anthropic",
+      "model": "claude-haiku-5-5",
+      "usage": {
+        "input": 4,
+        "output": 4,
+        "cacheRead": 12280,
+        "cacheWrite": 515,
+        "totalTokens": 12803,
+        "cost": {
+          "input": 4.0000000000000003e-7,
+          "output": 2e-6,
+          "cacheRead": 0.0001228,
+          "cacheWrite": 0.00010300000000000001,
+          "total": 0.00022820000000000002
+        },
+        "cttl": {
+          "ephemeral1h": 515
+        }
+      },
+      "stopReason": "stop",
+      "timestamp": 1795596147054
+    }
+  },
+  {
+    "type": "model_usage",
+    "id": "fadd8092",
+    "parentId": "f8f3fd43",
+    "timestamp": "2026-11-25T08:42:30.813Z",
+    "runtime": {
+      "version": "19.1.1"
+    },
+    "purpose": "compaction:handoff",
+    "api": "anthropic-messages",
+    "provider": "anthropic",
+    "model": "claude-haiku-5-5",
+    "usage": {
+      "input": 4,
+      "output": 267,
+      "cacheRead": 12795,
+      "cacheWrite": 500,
+      "totalTokens": 13566,
+      "cost": {
+        "input": 4.0000000000000003e-7,
+        "output": 0.0001335,
+        "cacheRead": 0.00012795,
+        "cacheWrite": 0.0001,
+        "total": 0.00036185
+      },
+      "cttl": {
+        "ephemeral1h": 500
+      }
+    },
+    "stopReason": "stop",
+    "duration": 2120.9673330000005,
+    "ttft": 1226.9809999999998
+  },
+  {
+    "type": "compaction",
+    "id": "118eda76",
+    "parentId": "fadd8092",
+    "timestamp": "2026-11-25T08:42:30.816Z",
+    "runtime": {
+      "version": "19.1.1"
+    },
+    "summary": "## Goal\n- (trimmed)",
+    "firstKeptEntryId": "f8f3fd43",
+    "tokensBefore": 12803,
+    "tokensAfter": 11760,
+    "method": "handoff",
+    "details": {
+      "readFiles": [],
+      "modifiedFiles": []
+    },
+    "fromExtension": false
+  }
+]

@@ -1,0 +1,111 @@
+{
+  "//": "omp 19.1.1 two-turn session around fork {entryId} (WP-B fork-lease probe, fork-lease-cli.jsonl). twoTurnEntries are the entry lines of the --fork copy on disk, which match its get_entries reply; forkedEntries is get_entries after the fork. Fields cut to type, ids, customType and role.",
+  "twoTurnEntries": {
+    "entries": [
+      {
+        "type": "model_change",
+        "id": "7a7ada18",
+        "parentId": null
+      },
+      {
+        "type": "thinking_level_change",
+        "id": "877f7c28",
+        "parentId": "7a7ada18"
+      },
+      {
+        "type": "custom",
+        "id": "ccf3f9ca",
+        "parentId": "877f7c28",
+        "customType": "date-cwd-reminder"
+      },
+      {
+        "type": "message",
+        "id": "e1078788",
+        "parentId": "ccf3f9ca",
+        "message": {
+          "role": "user"
+        }
+      },
+      {
+        "type": "custom",
+        "id": "e8799826",
+        "parentId": "e1078788",
+        "customType": "system-prompt-digest"
+      },
+      {
+        "type": "message",
+        "id": "00633b09",
+        "parentId": "e8799826",
+        "message": {
+          "role": "assistant"
+        }
+      },
+      {
+        "type": "credential_pin",
+        "id": "257e1f23",
+        "parentId": "00633b09"
+      },
+      {
+        "type": "message",
+        "id": "22d686f8",
+        "parentId": "257e1f23",
+        "message": {
+          "role": "user"
+        }
+      },
+      {
+        "type": "message",
+        "id": "3e707143",
+        "parentId": "22d686f8",
+        "message": {
+          "role": "assistant"
+        }
+      }
+    ],
+    "leafId": "3e707143"
+  },
+  "forkEntryId": "00633b09",
+  "forkedEntries": {
+    "entries": [
+      {
+        "type": "model_change",
+        "id": "7a7ada18",
+        "parentId": null
+      },
+      {
+        "type": "thinking_level_change",
+        "id": "877f7c28",
+        "parentId": "7a7ada18"
+      },
+      {
+        "type": "custom",
+        "id": "ccf3f9ca",
+        "parentId": "877f7c28",
+        "customType": "date-cwd-reminder"
+      },
+      {
+        "type": "message",
+        "id": "e1078788",
+        "parentId": "ccf3f9ca",
+        "message": {
+          "role": "user"
+        }
+      },
+      {
+        "type": "custom",
+        "id": "e8799826",
+        "parentId": "e1078788",
+        "customType": "system-prompt-digest"
+      },
+      {
+        "type": "message",
+        "id": "00633b09",
+        "parentId": "e8799826",
+        "message": {
+          "role": "assistant"
+        }
+      }
+    ],
+    "leafId": "00633b09"
+  }
+}

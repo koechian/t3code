@@ -1,0 +1,65 @@
+{
+  "source": "omp 19.1.1 recordings from the Phase 0 host-tools spike and the WP-E probe; frames verbatim.",
+  "readOnlyToolCommandCall": {
+    "type": "host_tool_call",
+    "id": "15dbf4f92f7499c6",
+    "toolCallId": "toolu_01WBEjYqdR34E3pGie6SsNA6:cmd:0",
+    "toolName": "mcp__t3-code__thread_lookup",
+    "arguments": {
+      "query": "alpha"
+    }
+  },
+  "toolCommandCall": {
+    "type": "host_tool_call",
+    "id": "15dbc3e6c7f466ac",
+    "toolCallId": "toolu_01LQqfcG3DkvRJuSFoBB7dBv:cmd:0",
+    "toolName": "t3_discover",
+    "arguments": {
+      "query": "abc"
+    }
+  },
+  "slowCall": {
+    "type": "host_tool_call",
+    "id": "15dbc45efb1c374f",
+    "toolCallId": "toolu_014rhVQez8oncuCHxpDzy6uG",
+    "toolName": "t3_slow",
+    "arguments": {
+      "label": "x"
+    }
+  },
+  "slowCancel": {
+    "type": "host_tool_cancel",
+    "id": "15dbc45ff75c3750",
+    "targetId": "15dbc45efb1c374f"
+  },
+  "badNameDefinition": {
+    "name": "t3 bad/name.x",
+    "description": "Name with a space, slash and dot.",
+    "loadMode": "essential",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  "bogusSchemaDefinition": {
+    "name": "t3_bogus_type",
+    "description": "Invalid JSON Schema type keyword.",
+    "loadMode": "essential",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "nope"
+        }
+      }
+    }
+  },
+  "_lines": {
+    "readOnlyToolCommandCall": "wp-e/readonly-tool-command-rerun.jsonl:33",
+    "toolCommandCall": "host-tools/02-roundtrip.jsonl:142",
+    "slowCall": "host-tools/04-cancel.jsonl:21",
+    "slowCancel": "host-tools/04-cancel.jsonl:28",
+    "badNameDefinition": "host-tools/06-bad-names.jsonl:7",
+    "bogusSchemaDefinition": "host-tools/06d-bogus-schema.jsonl:7"
+  }
+}

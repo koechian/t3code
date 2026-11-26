@@ -10,11 +10,11 @@ past 30 days of usage, and a 90-day activity grid below the composer whenever yo
 
 ## Understand your usage
 
-Usage aggregates history across Codex, Claude Code, Grok Build, OpenCode, Antigravity, Pi, Muse Code, and Cursor from your selected environments. Estimates reflect API-equivalent rates (not your subscription bill); **Premium** shows Fast/Ultrafast surcharge, and **Other** shows unsplit provider-reported costs.
+Usage aggregates history across Codex, Claude Code, Grok Build, OpenCode, Antigravity, Pi, OMP, Muse Code, and Cursor from your selected environments. Estimates reflect API-equivalent rates (not your subscription bill); **Premium** shows Fast/Ultrafast surcharge, and **Other** shows unsplit provider-reported costs.
 
 - **Usage access**: T3 Code reads an agent's local history only for agents you have turned on and allowed. The first time you open Usage, it asks which agents to include; change your answer per agent in **Settings → Providers → Usage access** (web/desktop). Grok and OpenCode Go limits, Claude reset credits, and matching Claude limits to your account read the agent's sign-in, so they also wait for this permission.
 - **Retention**: Servers keep scanned usage history for **92 days** by default (preserving Claude history after Claude's 30-day cleanup). Change `usageHistoryRetentionDays` in `<t3-home>/userdata/settings.json` (e.g. `365` or `"unlimited"`; views show up to 90 days).
-- **Custom data directories**: Honors `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `GROK_HOME`, `PI_CODING_AGENT_DIR` / `PI_CODING_AGENT_SESSION_DIR`, `OPENCODE_DATA_DIR`, `ANTIGRAVITY_DATA_DIR`, and `XDG_DATA_HOME` (Muse). Use absolute or `~/` paths. Set `T3CODE_HOST_ID` to pin a container's host identity.
+- **Custom data directories**: Honors `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `GROK_HOME`, `PI_CODING_AGENT_DIR` / `PI_CODING_AGENT_SESSION_DIR`, `OPENCODE_DATA_DIR`, `ANTIGRAVITY_DATA_DIR`, and `XDG_DATA_HOME` (Muse). OMP reads T3 Code's own OMP sessions and `~/.omp/agent/sessions`, following `OMP_PROFILE`, `PI_CONFIG_DIR`, and `XDG_DATA_HOME`; sessions saved under `PI_CODING_AGENT_DIR` or `PI_CODING_AGENT_SESSION_DIR` count as Pi usage. Use absolute or `~/` paths. Set `T3CODE_HOST_ID` to pin a container's host identity.
 - **Exclusions**: Codex and Claude Code 2.0.63+ text-generation runs (titles, commits, PR text, review guides) and Grok turns without a saved completed-turn record are not included.
 
 ## Custom model prices and filtering

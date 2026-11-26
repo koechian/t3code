@@ -1,0 +1,399 @@
+{
+  "commands": [
+    {
+      "name": "security",
+      "description": "Plan, run, inspect, import, and compare OMP-native security scans",
+      "input": {
+        "hint": "<plan|scan|status|cancel|scans|show|import|export|validate|compare|disposition>"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "model",
+      "aliases": ["models"],
+      "description": "Show current model selection",
+      "source": "builtin"
+    },
+    {
+      "name": "switch",
+      "description": "Switch model for this session only",
+      "input": {
+        "hint": "[model]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "fast",
+      "description": "Toggle fast mode",
+      "input": {
+        "hint": "[on|ultra|off|status]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "slow",
+      "description": "Toggle slow mode",
+      "input": {
+        "hint": "[on|off|status]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "skillful",
+      "description": "Toggle skill listing",
+      "input": {
+        "hint": "[on|off|status]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "extended-context",
+      "description": "Toggle extended context",
+      "input": {
+        "hint": "[on|off|status]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "computer",
+      "description": "Toggle computer use",
+      "input": {
+        "hint": "[on|off|status]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "ratchet",
+      "description": "Build (or reuse) an eval for an LLM flow, then hillclimb it unattended",
+      "input": {
+        "hint": "[flow and goal]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "prewalk",
+      "description": "Arm, restart, or cancel prewalk",
+      "input": {
+        "hint": "[into] | restart [from] [into] | off"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "modelpreset",
+      "description": "Manage model presets",
+      "input": {
+        "hint": "[list|save|switch|delete] [name]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "effort",
+      "description": "Set or show reasoning effort (thinking level, intelligence)",
+      "input": {
+        "hint": "[level]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "advisor",
+      "description": "Toggle advisor",
+      "input": {
+        "hint": "[on|off|status|dump [raw]|configure]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "export",
+      "description": "Export session to HTML file",
+      "input": {
+        "hint": "[--themes] [path]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "trace",
+      "description": "Open this session's trace in the stats dashboard",
+      "source": "builtin"
+    },
+    {
+      "name": "dump",
+      "description": "Return full transcript as plain text, with LLM request JSON path",
+      "input": {
+        "hint": "[all|anon]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "share",
+      "description": "Share session via an encrypted link (share server or secret gist)",
+      "source": "builtin"
+    },
+    {
+      "name": "browser",
+      "description": "Toggle browser eval-prelude headless vs visible mode",
+      "input": {
+        "hint": "[headless|visible]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "todo",
+      "description": "Manage todos",
+      "input": {
+        "hint": "<subcommand>"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "session",
+      "description": "Show or configure the current session",
+      "input": {
+        "hint": "[info|delete|pin [account]]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "jobs",
+      "description": "Show background jobs",
+      "input": {
+        "hint": "[full|kill <id>|kill all]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "usage",
+      "description": "Show token usage",
+      "input": {
+        "hint": "[show|reset [provider/credential-id|provider/active]]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "stats",
+      "description": "Launch the local stats dashboard",
+      "input": {
+        "hint": "[--port <port>] [--host <host>]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "changelog",
+      "description": "Show changelog",
+      "input": {
+        "hint": "[full|last [N]]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "tools",
+      "description": "Show available tools",
+      "source": "builtin"
+    },
+    {
+      "name": "context",
+      "description": "Show context usage",
+      "source": "builtin"
+    },
+    {
+      "name": "mcp",
+      "description": "Manage MCP servers",
+      "input": {
+        "hint": "<subcommand>"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "commit",
+      "description": "Commit only the changes this agent and its subagents made",
+      "input": {
+        "hint": "[instructions]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "ssh",
+      "description": "Manage SSH connections",
+      "input": {
+        "hint": "<subcommand>"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "fresh",
+      "description": "Reset provider stream state without changing the local transcript",
+      "source": "builtin"
+    },
+    {
+      "name": "compact",
+      "description": "Compact the conversation",
+      "input": {
+        "hint": "[soft|remote|snapcompact|handoff] [focus]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "shake",
+      "description": "Shake heavy content out of the conversation context",
+      "input": {
+        "hint": "[elide|images|thinking]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "handoff",
+      "description": "Compact in the background with a handoff summary (alias for /compact handoff)",
+      "input": {
+        "hint": "[focus instructions]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "pin",
+      "description": "Pin or unpin a session at the top of the resume list",
+      "input": {
+        "hint": "[session id]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "unpin",
+      "description": "Unpin a session from the top of the resume list",
+      "input": {
+        "hint": "[session id]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "retry",
+      "description": "Retry the last failed agent turn",
+      "source": "builtin"
+    },
+    {
+      "name": "memory",
+      "description": "Manage memory",
+      "input": {
+        "hint": "<subcommand>"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "rename",
+      "description": "Rename the current session (omit title to generate)",
+      "input": {
+        "hint": "[title]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "move",
+      "description": "Move the current session to a different directory",
+      "input": {
+        "hint": "[<path>]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "wt",
+      "aliases": ["worktree"],
+      "description": "Move this session into a new worktree, changes included",
+      "input": {
+        "hint": "[<branch>]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "add-dir",
+      "description": "Add a workspace directory to this session",
+      "input": {
+        "hint": "<path>"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "remove-dir",
+      "description": "Remove a workspace directory from this session",
+      "input": {
+        "hint": "<path>"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "dirs",
+      "description": "List this session's workspace directories",
+      "source": "builtin"
+    },
+    {
+      "name": "marketplace",
+      "description": "Manage plugins from marketplaces",
+      "input": {
+        "hint": "<subcommand>"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "plugins",
+      "aliases": ["plugin"],
+      "description": "Manage plugins",
+      "input": {
+        "hint": "[list|enable|disable]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "reload-plugins",
+      "description": "Reload all plugins",
+      "source": "builtin"
+    },
+    {
+      "name": "force",
+      "aliases": ["force:"],
+      "description": "Force next turn to use a specific tool",
+      "input": {
+        "hint": "<tool-name> [prompt]"
+      },
+      "source": "builtin"
+    },
+    {
+      "name": "forget-approvals",
+      "description": "Forget every file and folder approval Ask and remember has recorded",
+      "source": "builtin"
+    },
+    {
+      "name": "autoresearch",
+      "description": "Toggle builtin autoresearch mode, or pass off / clear, or a goal message.",
+      "input": {
+        "hint": "arguments"
+      },
+      "source": "extension"
+    },
+    {
+      "name": "init",
+      "description": "Generate AGENTS.md for current codebase",
+      "source": "file"
+    },
+    {
+      "name": "skill:handoff",
+      "description": "Compact the current conversation into a handoff document for another agent to pick up.",
+      "input": {
+        "hint": "arguments"
+      },
+      "source": "skill"
+    },
+    {
+      "name": "skill:research",
+      "description": "Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent.",
+      "input": {
+        "hint": "arguments"
+      },
+      "source": "skill"
+    },
+    {
+      "name": "review",
+      "description": "Launch interactive code review",
+      "input": {
+        "hint": "arguments"
+      },
+      "source": "custom"
+    }
+  ]
+}

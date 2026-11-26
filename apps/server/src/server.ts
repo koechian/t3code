@@ -335,7 +335,7 @@ const layerUsage = UsageService.layer.pipe(
       MuseUsageHome.layer,
       CodexUsageHistory.layer,
       CursorUsageAccounts.layer.pipe(Layer.provide(CursorAccountReader.layer)),
-    ).pipe(Layer.provide(ProviderHostLive.layer.pipe(Layer.provide(ServerSecretStore.layer)))),
+    ).pipe(Layer.provideMerge(ProviderHostLive.layer.pipe(Layer.provide(ServerSecretStore.layer)))),
   ),
   Layer.provide(layerServerSettings),
 );

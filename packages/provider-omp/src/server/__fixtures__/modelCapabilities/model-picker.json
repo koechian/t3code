@@ -1,0 +1,90 @@
+{
+  "rows": [
+    {
+      "provider": "anthropic",
+      "id": "claude-haiku-5-5",
+      "name": "Claude Haiku 5.5",
+      "roles": [
+        {
+          "role": "default",
+          "label": "default"
+        },
+        {
+          "role": "smol",
+          "label": "smol"
+        },
+        {
+          "role": "slow",
+          "label": "slow"
+        },
+        {
+          "role": "vision",
+          "label": "vision"
+        },
+        {
+          "role": "plan",
+          "label": "plan"
+        },
+        {
+          "role": "commit",
+          "label": "commit"
+        },
+        {
+          "role": "tiny",
+          "label": "tiny"
+        },
+        {
+          "role": "memory",
+          "label": "memory"
+        },
+        {
+          "role": "task",
+          "label": "task"
+        },
+        {
+          "role": "advisor",
+          "label": "advisor"
+        },
+        {
+          "role": "widget",
+          "label": "widget"
+        },
+        {
+          "role": "judge",
+          "label": "judge"
+        }
+      ],
+      "thinking": ["auto", "off", "low", "medium", "high", "xhigh", "max"],
+      "thinkingLevel": "off",
+      "current": true
+    },
+    {
+      "provider": "anthropic",
+      "id": "claude-opus-5-5",
+      "name": "Claude Opus 5.5",
+      "thinking": ["auto", "off", "low", "medium", "high", "xhigh", "max"],
+      "thinkingLevel": "off"
+    },
+    {
+      "provider": "openrouter",
+      "id": "aion-labs/aion-2.0",
+      "name": "Aion-2.0",
+      "thinking": ["auto", "off", "minimal", "low", "medium", "high"],
+      "thinkingLevel": "off"
+    },
+    {
+      "provider": "amazon-bedrock",
+      "id": "us.meta.llama4-scout-17b-instruct-v1:0",
+      "name": "Llama 4 Scout 17B Instruct"
+    },
+    {
+      "provider": "openrouter",
+      "id": "aion-labs/aion-2.0",
+      "name": "Aion-2.0",
+      "thinking": ["auto", "off", "minimal", "low", "medium", "high"],
+      "thinkingLevel": "off"
+    }
+  ],
+  "recent": 100,
+  "total": 633
+}

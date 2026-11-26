@@ -35,6 +35,7 @@ const REAL_PROVIDERS = [
   "grok",
   "muse",
   "pi",
+  "omp",
   "opencode",
   "antigravity",
 ];
