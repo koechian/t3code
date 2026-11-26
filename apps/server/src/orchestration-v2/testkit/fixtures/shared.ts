@@ -375,6 +375,12 @@ export const PI_MODEL_SELECTION = {
   model: "openrouter/deepseek/deepseek-v4-flash",
 } satisfies ModelSelection;
 
+/** The cheapest first-party Anthropic model omp lists; the recorder refuses frames from any other. */
+export const OMP_MODEL_SELECTION = {
+  instanceId: ProviderInstanceId.make("omp"),
+  model: "anthropic/claude-haiku-5-5",
+} satisfies ModelSelection;
+
 export const ACP_REGISTRY_MODEL_SELECTION = {
   instanceId: ProviderInstanceId.make("acpRegistry"),
   model: "default",

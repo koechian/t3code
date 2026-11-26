@@ -90,6 +90,7 @@ Open **Settings → Providers** (web or desktop), select the environment, and en
 | **OpenCode**     | Install [OpenCode](https://opencode.ai) and run `opencode auth login`.                                                   | [OpenCode](./providers-opencode.md)       |
 | **Kiro**         | Install [Kiro CLI](https://kiro.dev/docs/cli/) and run `kiro-cli login`.                                                 | [Kiro](./providers-kiro.md)               |
 | **Pi**           | Install [Pi](./providers-pi.md) (Node.js 22.19+) and run `pi` → `/login`.                                                | [Pi](./providers-pi.md)                   |
+| **OMP**          | Install [OMP](./providers-omp.md#set-up-omp) 19.1.1+ and run `omp` → `/login`.                                           | [OMP](./providers-omp.md)                 |
 | **Muse Code**    | Install [Muse Code](https://dev.meta.ai/docs/muse-code) and run `muse login`.                                            | [Muse Code](./providers-muse.md)          |
 | **fx**           | Install [fx](https://fx.sh) and run `fx login`.                                                                          | [fx](./providers-fx.md)                   |
 | **ACP Registry** | Add GitHub Copilot and other agents in **Settings → Providers → Add provider → Show more**.                              | [ACP](./providers-acp.md)                 |
@@ -116,6 +117,7 @@ T3CODE_CODEX_PROBE_TIMEOUT_MS=60000 T3CODE_CLAUDE_PROBE_TIMEOUT_MS=60000 t3 serv
 | Kiro         | `T3CODE_KIRO_PROBE_TIMEOUT_MS`         |
 | fx           | `T3CODE_FX_PROBE_TIMEOUT_MS`           |
 | Pi           | `T3CODE_PI_PROBE_TIMEOUT_MS`           |
+| OMP          | `T3CODE_OMP_PROBE_TIMEOUT_MS`          |
 | Muse Code    | `T3CODE_MUSE_PROBE_TIMEOUT_MS`         |
 | OpenCode     | `T3CODE_OPENCODE_PROBE_TIMEOUT_MS`     |
 | ACP Registry | `T3CODE_ACP_REGISTRY_PROBE_TIMEOUT_MS` |

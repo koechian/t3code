@@ -1,0 +1,398 @@
+{
+  "//": "omp 19.1.1 frames cut from the Phase 0 fixtures: approvals/parallel-always-ask.jsonl:31,33; turn-lifecycle/08-cost-cap.jsonl:28; 07-provider-error.jsonl:24; 09b-compaction-small-keep.jsonl:10 (text cut),11,70; 04-queue-followup-while-streaming.jsonl:22,49,78,81,82,84,94; wp-e/readonly-tool-command-rerun.jsonl:69-71. Prompt ids are rewritten at test time; bash details.trace is removed as rpc.ts does. forkEntries: get_entries for a two-turn session (WP-B fork-lease probe, fork-lease-cli.jsonl), fields cut to type, ids and role. Phase 3 (round-a): taskStart, taskEnd, runningSubagent (sessionFile normalized), cancelSubagentResult from subagent-stop-abort-then-cancel.jsonl:43,47,90,96; removeQueuedMessageResult from stop-bash-queued-steer-remove-then-abort.jsonl:31; goalContinuationStart, followUpQueued, followUpUserMessageStart from phase2/queue-prompt-during-autonomous-run.jsonl:16,35,78.",
+  "bashStart": {
+    "type": "tool_execution_start",
+    "toolCallId": "toolu_01BqruGV9QrmWTH9fPwPmDq2",
+    "toolName": "bash",
+    "args": {
+      "command": "echo a > a.txt"
+    }
+  },
+  "bashApproval": {
+    "type": "extension_ui_request",
+    "id": "15dbc40cd077df98",
+    "method": "select",
+    "title": "Allow tool: bash\nCommand: echo a > a.txt",
+    "options": ["Approve", "Approve bash for this session", "Deny"]
+  },
+  "costCapResult": {
+    "type": "prompt_result",
+    "id": "two",
+    "agentInvoked": true,
+    "status": "error",
+    "sessionSettled": true,
+    "error": {
+      "message": "Cost cap reached: this session spent $0.0002 of its $0.0001 cap (--max-cost / session.maxCost), so the next model request was not sent.",
+      "retryable": false,
+      "code": "cost_cap"
+    }
+  },
+  "providerErrorResult": {
+    "type": "prompt_result",
+    "id": "err-noretry",
+    "agentInvoked": true,
+    "status": "error",
+    "sessionSettled": true,
+    "error": {
+      "message": "Couldn't connect to 127.0.0.1:9 (connection refused). Check that the server is running and reachable.",
+      "provider": "anthropic",
+      "model": "claude-haiku-5-5",
+      "retryable": true
+    }
+  },
+  "localCommandAck": {
+    "id": "ctx-1",
+    "type": "response",
+    "command": "prompt",
+    "success": true,
+    "data": {
+      "agentInvoked": false
+    }
+  },
+  "yieldedPromptResult": {
+    "type": "prompt_result",
+    "id": "long",
+    "agentInvoked": true,
+    "status": "completed",
+    "sessionSettled": false
+  },
+  "backgroundedStart": {
+    "type": "tool_execution_start",
+    "toolCallId": "toolu_01FDm9tDqLW7tP9cL65UuhzJ",
+    "toolName": "bash",
+    "args": {
+      "command": "sleep 12; echo slept"
+    }
+  },
+  "backgroundedEnd": {
+    "type": "tool_execution_end",
+    "toolCallId": "toolu_01FDm9tDqLW7tP9cL65UuhzJ",
+    "toolName": "bash",
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "Backgrounded early to handle an incoming message; the command keeps running.\n\nBackgrounded as job bg_1 (killed once it has run 300s in total; `timeout: 0` disables the deadline); its output is injected into the conversation as a follow-up the moment it finishes. Do NOT poll for it (no `sleep`, `ps`, `pgrep`, `top`, `pidwait`, log tailing): every poll is a wasted turn. Do other work, or end your reply and wait to be woken."
+        }
+      ],
+      "details": {
+        "async": {
+          "state": "running",
+          "jobId": "bg_1",
+          "type": "bash"
+        },
+        "timeoutSeconds": 300
+      }
+    },
+    "isError": false
+  },
+  "backgroundedCompletion": {
+    "type": "tool_execution_update",
+    "toolCallId": "toolu_01FDm9tDqLW7tP9cL65UuhzJ",
+    "toolName": "bash",
+    "args": {
+      "command": "sleep 12; echo slept"
+    },
+    "partialResult": {
+      "content": [
+        {
+          "type": "text",
+          "text": "slept\n\n\nWall time: 12.04 seconds"
+        }
+      ],
+      "details": {
+        "wallTimeNoticeEmitted": true,
+        "timeoutSeconds": 300,
+        "wallTimeMs": 12041.407,
+        "async": {
+          "state": "completed",
+          "jobId": "bg_1",
+          "type": "bash"
+        }
+      }
+    }
+  },
+  "wakeAgentStart": {
+    "type": "agent_start"
+  },
+  "asyncResultStart": {
+    "type": "message_start",
+    "message": {
+      "role": "custom",
+      "customType": "async-result",
+      "content": "<system-notice>\nBackground job bg_1 (sleep 12; echo slept) has completed.\nResume your work using the result below.\nslept\nWall time: 12.04 seconds\n</system-notice>",
+      "display": true,
+      "attribution": "agent",
+      "details": {
+        "meta": {
+          "source": {
+            "type": "report",
+            "value": "background job delivery"
+          }
+        },
+        "jobs": [
+          {
+            "jobId": "bg_1",
+            "type": "bash",
+            "status": "completed",
+            "label": "sleep 12; echo slept",
+            "durationMs": 12042
+          }
+        ]
+      },
+      "timestamp": 1795595983427
+    },
+    "messageId": "msg-8"
+  },
+  "sessionSettled": {
+    "type": "session_settled"
+  },
+  "contextCommandOutput": {
+    "type": "command_output",
+    "text": "Context window: 100000 tokens (11% used)\n  System prompt    [\u001b[38;5;243m█░░\u001b[39m] 3%  2746 tokens"
+  },
+  "forkEntries": {
+    "entries": [
+      {
+        "type": "model_change",
+        "id": "7a7ada18",
+        "parentId": null
+      },
+      {
+        "type": "thinking_level_change",
+        "id": "877f7c28",
+        "parentId": "7a7ada18"
+      },
+      {
+        "type": "custom",
+        "id": "ccf3f9ca",
+        "parentId": "877f7c28",
+        "customType": "date-cwd-reminder"
+      },
+      {
+        "type": "message",
+        "id": "e1078788",
+        "parentId": "ccf3f9ca",
+        "message": {
+          "role": "user"
+        }
+      },
+      {
+        "type": "custom",
+        "id": "e8799826",
+        "parentId": "e1078788",
+        "customType": "system-prompt-digest"
+      },
+      {
+        "type": "message",
+        "id": "00633b09",
+        "parentId": "e8799826",
+        "message": {
+          "role": "assistant"
+        }
+      },
+      {
+        "type": "credential_pin",
+        "id": "257e1f23",
+        "parentId": "00633b09"
+      },
+      {
+        "type": "message",
+        "id": "22d686f8",
+        "parentId": "257e1f23",
+        "message": {
+          "role": "user"
+        }
+      },
+      {
+        "type": "message",
+        "id": "3e707143",
+        "parentId": "22d686f8",
+        "message": {
+          "role": "assistant"
+        }
+      }
+    ],
+    "leafId": "3e707143"
+  },
+  "nestedCommandStart": {
+    "type": "tool_execution_start",
+    "toolCallId": "toolu_01CC4CzMyzWWPyCzYtYP3uAG",
+    "toolName": "bash",
+    "args": {
+      "command": "mcp__t3-code__thread_rename --title beta"
+    }
+  },
+  "nestedCommandApproval": {
+    "type": "extension_ui_request",
+    "id": "15dbf4fa59b499c8",
+    "method": "select",
+    "title": "Allow tool: mcp__t3-code__thread_rename\nOrigin: MCP server tool\nArguments:\n{\n  \"title\": \"beta\"\n}",
+    "options": ["Approve", "Approve mcp__t3-code__thread_rename for this session", "Deny"]
+  },
+  "nestedCommandEnd": {
+    "type": "tool_execution_end",
+    "toolCallId": "toolu_01CC4CzMyzWWPyCzYtYP3uAG",
+    "toolName": "bash",
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "Backgrounded while a tool command waits for the user's approval; the command keeps running.\n\nBackgrounded as job bg_1 (killed once it has run 300s in total; `timeout: 0` disables the deadline); its output is injected into the conversation as a follow-up the moment it finishes. Do NOT poll for it (no `sleep`, `ps`, `pgrep`, `top`, `pidwait`, log tailing): every poll is a wasted turn. Do other work, or end your reply and wait to be woken."
+        }
+      ],
+      "details": {
+        "async": {
+          "state": "running",
+          "jobId": "bg_1",
+          "type": "bash"
+        },
+        "timeoutSeconds": 300
+      }
+    },
+    "isError": false
+  },
+  "manualCompactionStart": {
+    "type": "manual_compaction_start"
+  },
+  "taskStart": {
+    "type": "tool_execution_start",
+    "toolCallId": "toolu_0177Vau29bGe3aZ1NDnH4NMq",
+    "toolName": "task",
+    "args": {
+      "tasks": [
+        {
+          "name": "Napper",
+          "agent": "task",
+          "task": "Run the bash command `/bin/sleep 52; echo nap-done` and report its output verbatim.",
+          "solutionSpace": "one fix: run the given command as-is, report stdout"
+        }
+      ],
+      "context": "Single subagent assignment. Execute the bash command `/bin/sleep 52; echo nap-done` and report its output."
+    }
+  },
+  "taskEnd": {
+    "type": "tool_execution_end",
+    "toolCallId": "toolu_0177Vau29bGe3aZ1NDnH4NMq",
+    "toolName": "task",
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "Spawned agent `Napper` (job `Napper`).\n\nread proc:// lists jobs/services; read proc://<id> inspects status/output without consuming delivery; write proc://<id>/kill with empty `content` cancels/stops.\nJob IDs are process-local; delivered results expire shortly (~30s), unconsumed results within ~5min. Agent output/transcripts remain readable at agent://<id> / history://<id>. write agent://<id> messages a live agent."
+        }
+      ],
+      "details": {
+        "projectAgentsDir": null,
+        "results": [],
+        "totalDurationMs": 1,
+        "progress": [
+          {
+            "index": 0,
+            "id": "Napper",
+            "agent": "task",
+            "agentSource": "bundled",
+            "modelRole": "task",
+            "status": "pending",
+            "task": "Complete assignment thoroughly:\n\nRun the bash command `/bin/sleep 52; echo nap-done` and report its output verbatim.",
+            "assignment": "Run the bash command `/bin/sleep 52; echo nap-done` and report its output verbatim.",
+            "recentTools": [],
+            "recentOutput": [],
+            "toolCount": 0,
+            "requests": 0,
+            "tokens": 0,
+            "cost": 0,
+            "durationMs": 0
+          }
+        ],
+        "async": {
+          "state": "running",
+          "jobId": "Napper",
+          "type": "task"
+        }
+      }
+    },
+    "isError": false
+  },
+  "runningSubagent": {
+    "id": "Napper",
+    "index": 0,
+    "agent": "task",
+    "agentSource": "bundled",
+    "description": "Run sleep then echo nap-done",
+    "status": "running",
+    "task": "Complete assignment thoroughly:\n\nRun the bash command `/bin/sleep 52; echo nap-done` and report its output verbatim.",
+    "assignment": "Run the bash command `/bin/sleep 52; echo nap-done` and report its output verbatim.",
+    "sessionFile": "/omp-sessions/workspace/session-1/Napper.jsonl",
+    "lastUpdate": 1795646765749,
+    "parentToolCallId": "toolu_0177Vau29bGe3aZ1NDnH4NMq",
+    "progress": {
+      "index": 0,
+      "id": "Napper",
+      "agent": "task",
+      "agentSource": "bundled",
+      "status": "running",
+      "task": "Complete assignment thoroughly:\n\nRun the bash command `/bin/sleep 52; echo nap-done` and report its output verbatim.",
+      "assignment": "Run the bash command `/bin/sleep 52; echo nap-done` and report its output verbatim.",
+      "description": "Run sleep then echo nap-done",
+      "recentTools": [],
+      "recentOutput": [],
+      "toolCount": 1,
+      "requests": 1,
+      "tokens": 11345,
+      "cost": 0.0022941,
+      "durationMs": 1757,
+      "modelOverride": ["anthropic/claude-haiku-5-5"],
+      "modelRole": "task",
+      "contextWindow": 100000,
+      "resolvedModelIdentity": "anthropic/claude-haiku-5-5",
+      "resolvedThinkingLevel": "low",
+      "resolvedModel": "anthropic/claude-haiku-5-5:low",
+      "resolvedModelIsFallback": false,
+      "contextTokens": 11345,
+      "currentTool": "bash",
+      "currentToolArgs": "/bin/sleep 52; echo nap-done",
+      "currentToolArgsKey": "command",
+      "currentToolStartMs": 1795646765596
+    }
+  },
+  "cancelSubagentResult": {
+    "cancelled": true
+  },
+  "removeQueuedMessageResult": {
+    "removed": true
+  },
+  "goalContinuationStart": {
+    "type": "message_start",
+    "message": {
+      "role": "custom",
+      "customType": "goal-continuation",
+      "content": "<!-- Hidden continuation steer. role=user, suppressed from visible transcript. -->\n\nContinue active goal.\n\n<objective>\nRun the bash command `sleep 3`, then mark this goal complete with the goal tool and reply with the single word: ok.\n</objective>\n\nBudget:\n- Tokens used: 0\n- Token budget: 60000\n- Tokens remaining: 60000\n- Time used: 0 seconds\n\nAutonomous continuation; objective persists across turns. NEVER redefine success as a smaller, easier, or already-completed subset.\n\nBefore `goal({op:\"complete\"})`, MUST audit current repo state:\n\n1. Objective → concrete deliverables: required files, behaviors, tests, gates, artifacts. Record in todo or reasoning.\n2. Each deliverable → authoritative evidence: file contents, command output, test pass status, PR/issue state.\n3. Inspect actual current state: read files; run commands/tests. NEVER rely on earlier-session memory — repo may have changed.\n4. Verification scope = claim scope. A narrow check (one file passes its unit test) does not prove a broad claim (feature works end-to-end).\n5. Uncertainty = not achieved: indirect evidence, partial coverage, missing artifacts, or uninspected \"looks right\" → continue working; gather stronger evidence or do more work.\n6. Budget exhaustion ≠ completion. NEVER call complete merely because tokens are nearly out. Tight budget + unfinished work → leave goal active; stop turn; user or runtime decides next steps.\n\nCall `goal({op:\"complete\"})` only when every deliverable has direct current-state evidence proving satisfaction. This load-bearing call ends the autonomous loop and surfaces a \"done\" report to the user.\n\nUnfinished: keep working. NEVER narrate continuation — execute.",
+      "display": false,
+      "attribution": "agent",
+      "timestamp": 1795643122520
+    },
+    "messageId": "msg-2"
+  },
+  "followUpQueued": {
+    "type": "queue_update",
+    "steering": [],
+    "followUp": ["Reply with the single word: three"],
+    "liveSteered": 0
+  },
+  "followUpUserMessageStart": {
+    "type": "message_start",
+    "message": {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Reply with the single word: three"
+        }
+      ],
+      "attribution": "user",
+      "timestamp": 1795643123350
+    },
+    "messageId": "msg-8"
+  }
+}

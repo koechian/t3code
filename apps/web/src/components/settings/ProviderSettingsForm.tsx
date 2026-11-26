@@ -221,6 +221,14 @@ const PACKAGE_FIELD_TEXT: ReadonlyMap<string, string> = new Map([
     msg("Additional CLI arguments passed to pi --mode rpc on session start."),
   ],
   [
+    "Path to the oh-my-pi (omp) coding agent binary.",
+    msg("Path to the oh-my-pi (omp) coding agent binary."),
+  ],
+  [
+    "Additional CLI arguments passed to omp --mode rpc-ui on session start.",
+    msg("Additional CLI arguments passed to omp --mode rpc-ui on session start."),
+  ],
+  [
     "Scoped to one repository, project, or workspace. Create it in that item's Bitbucket settings.",
     msg(
       "Scoped to one repository, project, or workspace. Create it in that item's Bitbucket settings.",

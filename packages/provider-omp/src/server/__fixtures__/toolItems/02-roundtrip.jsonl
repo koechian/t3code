@@ -1,0 +1,7 @@
+{"line":9,"frame":{"id":"reg","type":"response","command":"set_host_tools","success":true,"data":{"toolNames":["t3_echo","t3_fail","t3_soft_fail","t3_discover"]}}}
+{"line":23,"frame":{"type":"tool_execution_start","toolCallId":"toolu_015tekdWrwCFTwVEdHZbxP4s","toolName":"t3_echo","args":{"message":"hello"}}}
+{"line":29,"frame":{"type":"tool_execution_end","toolCallId":"toolu_015tekdWrwCFTwVEdHZbxP4s","toolName":"t3_echo","result":{"content":[{"type":"text","text":"ECHO:$request.arguments.message"}],"details":{"source":"t3","callId":"toolu_015tekdWrwCFTwVEdHZbxP4s"}},"isError":false}}
+{"line":63,"frame":{"type":"tool_execution_start","toolCallId":"toolu_01RGe5aEdWeU62upo9mWp4ur","toolName":"t3_fail","args":{}}}
+{"line":67,"frame":{"type":"tool_execution_end","toolCallId":"toolu_01RGe5aEdWeU62upo9mWp4ur","toolName":"t3_fail","result":{"content":[{"type":"text","text":"T3 refused: thread not found"}],"details":{}},"isError":true}}
+{"line":141,"frame":{"type":"tool_execution_start","toolCallId":"toolu_01LQqfcG3DkvRJuSFoBB7dBv","toolName":"bash","args":{"command":"t3_discover abc"}}}
+{"line":148,"frame":{"type":"tool_execution_end","toolCallId":"toolu_01LQqfcG3DkvRJuSFoBB7dBv","toolName":"bash","result":{"content":[{"type":"text","text":"record for $request.arguments.query: status=green\n"}],"details":{"wallTimeNoticeEmitted":false,"timeoutSeconds":300,"wallTimeMs":3.3029999999998836,"toolCommands":[{"tool":"t3_discover","mode":"execute","exitCode":0,"args":{"query":"abc"},"tier":"exec"}]}},"isError":false}}
