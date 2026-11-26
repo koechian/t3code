@@ -138,6 +138,13 @@ Subagents never ask for approval. In **Supervised**, OMP asks before it starts t
 that lets them run commands and change files without asking. A tool your OMP rules say to ask
 about fails inside a subagent instead.
 
+## Advisor
+
+When OMP's advisor is on, each of its reviews appears in the thread as an **Advisor review**
+notice. If OMP acts on a review of its final answer, that answer stays the turn's reply and OMP's
+follow-up appears as its own run. A review that arrives after a turn has ended, and that OMP does
+not act on, appears with your next message.
+
 ## Goals
 
 Send `/goal` followed by what "done" means, for example `/goal all tests in packages/api pass`.
