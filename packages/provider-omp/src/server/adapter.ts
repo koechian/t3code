@@ -72,6 +72,12 @@ import { PULL_REQUEST_LINKING_INSTRUCTIONS } from "@t3tools/provider-core/server
 import { turnScopedSelectionTransition } from "@t3tools/provider-core/server/selectionTransition";
 
 import { OmpSettings } from "../settings.ts";
+import {
+  isOmpAdvisorCard,
+  isOmpTerminalTextAnswer,
+  OMP_ADVISOR_NOTICE_TITLE,
+  ompAdvisorNotice,
+} from "./advisor.ts";
 import { OmpProviderCapabilitiesV2 } from "./capabilities.ts";
 import {
   classifyOmpSlashInput,
@@ -479,7 +485,8 @@ type OmpProviderGoal = OrchestrationV2ProviderGoal | null;
 
 interface PendingOmpPrompt {
   readonly id: string;
-  readonly turn: ActiveOmpTurn;
+  /** A turn that ended on an advisor continuation hands its prompts to the continuation. */
+  turn: ActiveOmpTurn;
   readonly kind: "turn_start" | "steer" | "compact" | "goal";
   readonly messageId: MessageId | undefined;
   readonly acknowledged: Deferred.Deferred<void>;
@@ -516,6 +523,12 @@ interface ActiveOmpTurn {
   abortRequested: boolean;
   adoptedWake: boolean;
   awaitingSettle: boolean;
+  /** omp continued the turn's run as an advisor continuation, which keeps its prompts and steers. */
+  handedOff: boolean;
+  /** The latest assistant message was a final text answer (`isOmpTerminalTextAnswer`). */
+  answered: boolean;
+  /** Advisor cards after the answer, until omp continues the run on them or keeps them as cards. */
+  readonly answerAdvisorCards: Array<OmpRecord>;
   activeCompaction: OmpCompactionState | null;
   compactionSkipped: boolean;
   compactionCancelled: boolean;
@@ -543,7 +556,22 @@ interface OmpThreadState {
 interface OmpWake {
   readonly state: OmpThreadState;
   readonly records: Array<OmpRecord>;
+  /** The turn that ended where omp continued its run for the advisor. */
+  readonly predecessor: ActiveOmpTurn | undefined;
 }
+
+/** What T3 shows for a run omp continued after its advisor reviewed the answer. */
+const OMP_ADVISOR_CONTINUATION = {
+  detail: "OMP is acting on its advisor's review.",
+  notification: {
+    source: { kind: "background_task" },
+    outcome: "updated",
+    summary: "Advisor follow-up",
+  },
+} as const satisfies Pick<
+  ProviderContinuationRequests.ProviderContinuationRequest,
+  "detail" | "notification"
+>;
 
 type PendingOmpResponse =
   | {
@@ -1110,6 +1138,8 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
       // Names in the latest catalog (a full replacement per `available_commands_update`).
       let commandCatalogNames: ReadonlySet<string> = new Set();
       const pendingSessionNotices: Array<string> = [];
+      /** Cards omp kept while no turn ran; like omp, T3 shows them with the next message. */
+      const idleAdvisorCards: Array<OmpRecord> = [];
 
       const applyToolCommandDelta = (delta: OmpToolCommandDelta | undefined) => {
         if (delta === undefined) return;
@@ -1428,6 +1458,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         nativeItemId: string,
         message: string,
         level?: "info" | "warning" | "error",
+        title = noticeTitle(message),
       ) {
         const emittedAt = yield* DateTime.now;
         yield* emitItemNode(turn, nativeItemId, "system", "completed", emittedAt, emittedAt);
@@ -1438,7 +1469,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
             ...baseItemFields(turn, nativeItemId, emittedAt, emittedAt),
             status: "completed",
             completedAt: emittedAt,
-            title: noticeTitle(message),
+            title,
             type: "system_notice",
             message,
             ...(level === undefined ? {} : { level }),
@@ -1458,6 +1489,26 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
             level,
           );
         });
+
+      const emitAdvisorNotice = (turn: ActiveOmpTurn, record: OmpRecord) =>
+        Effect.suspend(() => {
+          const notice = ompAdvisorNotice(ompRecordField(record, "message"));
+          if (notice === undefined) return Effect.void;
+          return emitSystemNotice(
+            turn,
+            `advisor:${turn.providerTurn.id}:${turn.nextItemOrdinal}`,
+            notice.message,
+            notice.level,
+            OMP_ADVISOR_NOTICE_TITLE,
+          );
+        });
+
+      const showAdvisorCards = (turn: ActiveOmpTurn, records: Array<OmpRecord>) =>
+        Effect.suspend(() =>
+          Effect.forEach(records.splice(0), (record) => emitAdvisorNotice(turn, record), {
+            discard: true,
+          }),
+        );
 
       const emitSteerStatus = (
         turn: ActiveOmpTurn,
@@ -2205,6 +2256,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
       });
 
       const releasePromptsOf = Effect.fnUntraced(function* (turn: ActiveOmpTurn) {
+        if (turn.handedOff) return;
         for (const [id, pending] of Array.from(pendingPrompts)) {
           if (pending.turn !== turn) continue;
           pendingPrompts.delete(id);
@@ -2257,6 +2309,16 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         turn.activeProviderRetry = null;
       });
 
+      const settleUnreadSteers = Effect.fnUntraced(function* (
+        turn: ActiveOmpTurn,
+        interrupted: boolean,
+      ) {
+        if (turn.handedOff) return;
+        for (const messageId of turn.unreadSteers.splice(0)) {
+          yield* emitSteerStatus(turn, messageId, interrupted ? "cancelled" : "completed");
+        }
+      });
+
       // Every terminal path settles open items and requests (docs/internals/03_providers.md).
       const settleTurnItems = Effect.fnUntraced(function* (
         turn: ActiveOmpTurn,
@@ -2272,9 +2334,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         if (!failed) yield* settleTurnRetry(turn, interrupted, completedAt);
         yield* settleOpenTools(turn, interrupted || failed);
         if (!keepRequests) yield* cancelPendingRequests(completedAt, true);
-        for (const messageId of turn.unreadSteers.splice(0)) {
-          yield* emitSteerStatus(turn, messageId, interrupted ? "cancelled" : "completed");
-        }
+        yield* settleUnreadSteers(turn, interrupted);
       });
 
       const emitTurnTerminal = Effect.fnUntraced(function* (
@@ -2410,6 +2470,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         if (turn === null) return;
         state.activeTurn = null;
         yield* releasePromptsOf(turn);
+        yield* showAdvisorCards(turn, turn.answerAdvisorCards);
         const end = yield* readTurnEndState(turn, processAlive);
         yield* adoptLiveSessionFile(state, end.live);
         const outcome = ompTurnOutcome(turn, Option.getOrUndefined(end.live)?.usageLimit);
@@ -2571,13 +2632,17 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         yield* emitSteerStatus(pending.turn, pending.messageId, "pending");
       });
 
+      /** The running turn, or the turn whose prompts a pending advisor continuation takes over. */
+      const ownsLivePrompts = (turn: ActiveOmpTurn) =>
+        threadState?.activeTurn === turn || pendingWake?.predecessor === turn;
+
       const onResponse = Effect.fnUntraced(function* (frame: OmpResponseFrame) {
         const pending = frame.id === undefined ? undefined : pendingPrompts.get(frame.id);
         // The first response for an id is the ack; omp can repeat it (TL/04:24-27).
         if (pending === undefined || pending.responded) return;
         pending.responded = true;
         yield* Deferred.succeed(pending.acknowledged, undefined);
-        if (threadState?.activeTurn !== pending.turn) return;
+        if (!ownsLivePrompts(pending.turn)) return;
         if (pending.kind === "steer") return yield* onSteerResponse(pending, frame);
         yield* onMainPromptResponse(pending, frame);
       });
@@ -2621,10 +2686,11 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
 
       const offerWake = Effect.fnUntraced(function* (
         target: NonNullable<ReturnType<typeof wakeTarget>>,
-        record: OmpRecord,
+        records: Array<OmpRecord>,
+        predecessor?: ActiveOmpTurn,
       ) {
         const { state, appThreadId, offer } = target;
-        const wake: OmpWake = { state, records: [record] };
+        const wake: OmpWake = { state, records, predecessor };
         pendingWake = wake;
         if (rollbackInProgress) return yield* stopPendingWake(wake);
         yield* updateProviderSession("running", null);
@@ -2632,7 +2698,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
           threadId: appThreadId,
           providerThreadId: state.providerThread.id,
           driver: OMP_PROVIDER,
-          detail: null,
+          ...(predecessor === undefined ? { detail: null } : OMP_ADVISOR_CONTINUATION),
           delivery: "adapter_buffered",
           dispatchIfCurrent: (dispatch) =>
             sessionEventPermit.withPermits(1)(
@@ -2674,7 +2740,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         // An idle omp starts a run to deliver the result of a subagent Stop cancelled (STG/03:137).
         if (stopRequested) return yield* sendAbort("abort");
         const target = wakeTarget(threadState);
-        if (target !== undefined) return yield* offerWake(target, record);
+        if (target !== undefined) return yield* offerWake(target, [record]);
         unsolicitedActivityDetected = true;
         yield* updateProviderSession("error", OMP_UNSOLICITED_ACTIVITY_ERROR);
         yield* connection.terminate;
@@ -2692,11 +2758,21 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         yield* completeTurnIfSettled(turn);
       });
 
+      /** A card right after the answer waits: omp either continues the run on it or keeps it. */
+      const onAdvisorCard = (record: OmpRecord) =>
+        Effect.suspend(() => {
+          const turn = threadState?.activeTurn ?? null;
+          if (turn !== null && !turn.answered) return emitAdvisorNotice(turn, record);
+          (turn?.answerAdvisorCards ?? idleAdvisorCards).push(record);
+          return Effect.void;
+        });
+
       const onCustomMessageEnd = Effect.fnUntraced(function* (
         message: OmpRecord,
         record: OmpRecord,
       ) {
         applyToolCommandDelta(ompToolCommandDelta(record));
+        if (isOmpAdvisorCard(message)) return yield* onAdvisorCard(record);
         if (ompRecordString(message, "customType") !== "async-result") return;
         const jobIds = backgroundJobIds(message);
         for (const hold of Array.from(backgroundHolds.values())) {
@@ -2709,16 +2785,55 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         yield* resolveSubagentResults(ompSubagentResultsFromMessage(message));
       });
 
-      const onMessageStart = Effect.fnUntraced(function* (frame: OmpFrameOf<"message_start">) {
+      const canHandOff = (turn: ActiveOmpTurn) =>
+        !turn.interrupted && !turn.abortRequested && turn.failure === null && !stopRequested;
+
+      /**
+       * omp continued the run on advisor cards that followed the answer (session-advisors.ts,
+       * #deliverAdvisorBatch), so the answer ends this turn and the rest of the run arrives as a
+       * wake. Its continuation inherits this turn's prompts, whose late prompt_result settles it.
+       */
+      const continueAfterAdvisor = Effect.fnUntraced(function* (
+        turn: ActiveOmpTurn,
+        record: OmpRecord,
+      ) {
+        turn.answered = false;
+        if (turn.answerAdvisorCards.length === 0) return false;
+        const target = wakeTarget(threadState);
+        if (target === undefined || !canHandOff(turn)) {
+          yield* showAdvisorCards(turn, turn.answerAdvisorCards);
+          return false;
+        }
+        const records = [...turn.answerAdvisorCards.splice(0), record];
+        turn.handedOff = true;
+        // Open requests stay with this turn until omp settles, as for a prompt that yielded.
+        if (pendingRequests.size > 0) turn.awaitingSettle = true;
+        yield* finalizeTurn(target.state);
+        yield* offerWake(target, records, turn);
+        return true;
+      });
+
+      const onUserMessageStart = Effect.fnUntraced(function* (
+        turn: ActiveOmpTurn,
+        message: OmpRecord,
+      ) {
+        // The run continues on this input, so the cards after the answer were only kept.
+        turn.answered = false;
+        yield* showAdvisorCards(turn, turn.answerAdvisorCards);
+        if (ompRecordBoolean(message, "steering") !== true) return;
+        const steer = turn.unreadSteers.shift();
+        if (steer !== undefined) yield* emitSteerStatus(turn, steer, "completed");
+      });
+
+      const onMessageStart = Effect.fnUntraced(function* (
+        frame: OmpFrameOf<"message_start">,
+        record: OmpRecord,
+      ) {
         const turn = threadState?.activeTurn ?? null;
         if (turn === null) return;
         const role = ompRecordString(frame.message, "role");
-        if (role === "user" && ompRecordBoolean(frame.message, "steering") === true) {
-          const steer = turn.unreadSteers.shift();
-          if (steer !== undefined) yield* emitSteerStatus(turn, steer, "completed");
-          return;
-        }
-        if (role !== "assistant") return;
+        if (role === "user") return yield* onUserMessageStart(turn, frame.message);
+        if (role !== "assistant" || (yield* continueAfterAdvisor(turn, record))) return;
         turn.messageOrdinal += 1;
         yield* reportLiveUsage(turn, ompRecordField(frame.message, "usage"));
       });
@@ -2767,6 +2882,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         message: OmpRecord,
       ) {
         yield* completeOpenStreamItems(turn);
+        turn.answered = isOmpTerminalTextAnswer(message);
         const reported = ompModelSlugOf({
           provider: ompRecordString(message, "provider"),
           id: ompRecordString(message, "model"),
@@ -3977,6 +4093,9 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
           abortRequested: false,
           adoptedWake: false,
           awaitingSettle: false,
+          handedOff: false,
+          answered: false,
+          answerAdvisorCards: [],
           activeCompaction: null,
           compactionSkipped: false,
           compactionCancelled: false,
@@ -4026,7 +4145,20 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
             "warning",
           );
         }
+        yield* showAdvisorCards(turn, idleAdvisorCards);
       });
+
+      /** The continuation owns what the turn it continues still waited on: prompts and steers. */
+      const inheritPredecessor = (turn: ActiveOmpTurn, wake: OmpWake | null) => {
+        const predecessor = wake?.predecessor;
+        if (predecessor === undefined) return;
+        for (const pending of pendingPrompts.values()) {
+          if (pending.turn === predecessor) pending.turn = turn;
+        }
+        turn.unreadSteers.push(...predecessor.unreadSteers.splice(0));
+        turn.sentPrompts.push(...predecessor.sentPrompts.splice(0));
+        if (predecessor.mainPrompt?.turn === turn) turn.mainPrompt ??= predecessor.mainPrompt;
+      };
 
       const settleWithoutPrompt = Effect.fnUntraced(function* (
         turn: ActiveOmpTurn,
@@ -4093,6 +4225,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
             }),
           ),
         );
+        inheritPredecessor(turn, wake);
         yield* emit({
           type: "provider_turn.updated",
           driver: OMP_PROVIDER,

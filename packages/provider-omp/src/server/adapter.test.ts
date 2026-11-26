@@ -43,6 +43,7 @@ import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
 import type { OmpSettings } from "../settings.ts";
+import advisorFrames from "./__fixtures__/advisor/frames.json" with { type: "json" };
 import frames from "./__fixtures__/adapter/frames.json" with { type: "json" };
 import goalFrames from "./__fixtures__/goal/frames.json" with { type: "json" };
 import subagentFrames from "./__fixtures__/subagents/frames.json" with { type: "json" };
@@ -61,7 +62,7 @@ import {
   type FakeOmpScript,
 } from "./rpc.testkit.ts";
 import { ompSessionDirForCwd } from "./sessions.ts";
-import type { OmpCommandFrame } from "./wire.ts";
+import { ompContentText, ompRecordField, ompRecordString, type OmpCommandFrame } from "./wire.ts";
 
 type AdapterEvent = ProviderAdapter.ProviderAdapterV2Event;
 type TerminalEvent = Extract<AdapterEvent, { readonly type: "turn.terminal" }>;
@@ -3505,4 +3506,349 @@ const fakeMcpServer = HttpClient.make((request) => {
   const message = decodeMcpBody(request);
   const reply = MCP_REPLIES[message.method]?.(message) ?? new Response(null, { status: 500 });
   return Effect.succeed(HttpClientResponse.fromWeb(request, reply));
+});
+
+describe("OmpAdapterV2 advisor", () => {
+  type RecordedFrame = Record<string, unknown>;
+  const { sameRun, wake: wakeRun, midTurn, kept } = advisorFrames;
+
+  const roleOf = (frame: RecordedFrame) => ompRecordString(frame["message"], "role");
+
+  /** The recording answered the probe's prompt; replayed, it answers T3's. */
+  const answering = (recorded: ReadonlyArray<RecordedFrame>, promptId: string) =>
+    recorded.map((frame) =>
+      frame["type"] === "prompt_result" ? { ...frame, id: promptId } : frame,
+    );
+
+  const recordedReplies = (recorded: ReadonlyArray<RecordedFrame>) =>
+    recorded.flatMap((frame) =>
+      frame["type"] === "message_end" && roleOf(frame) === "assistant"
+        ? [ompContentText(ompRecordField(frame["message"], "content"))]
+        : [],
+    );
+
+  /** What T3 shows for each recorded card: one single-note card per line. */
+  const recordedNotices = (recorded: ReadonlyArray<RecordedFrame>) =>
+    recorded.flatMap((frame) => {
+      if (frame["type"] !== "message_end" || roleOf(frame) !== "custom") return [];
+      const notes = ompRecordField(ompRecordField(frame["message"], "details"), "notes");
+      const [note] = Array.isArray(notes) ? notes : [];
+      const severity = ompRecordString(note, "severity");
+      const label = severity === "blocker" ? "Blocker" : "Nit";
+      return [
+        [`${label}: ${ompRecordString(note, "note")}`, severity === "blocker" ? "warning" : "info"],
+      ];
+    });
+
+  const indexOfFrame = (
+    recorded: ReadonlyArray<RecordedFrame>,
+    matches: (frame: RecordedFrame) => boolean,
+    from = 0,
+  ) => recorded.findIndex((frame, index) => index >= from && matches(frame));
+
+  const isCardEnd = (frame: RecordedFrame) =>
+    frame["type"] === "message_end" && roleOf(frame) === "custom";
+
+  const advisorNotices = (seen: ReadonlyArray<AdapterEvent>, providerTurnId?: ProviderTurnId) =>
+    seen.flatMap((event) =>
+      event.type === "turn_item.updated" &&
+      event.turnItem.type === "system_notice" &&
+      event.turnItem.title === "Advisor review" &&
+      (providerTurnId === undefined || event.turnItem.providerTurnId === providerTurnId)
+        ? [[event.turnItem.message, event.turnItem.level]]
+        : [],
+    );
+
+  const openWithWakes = Effect.fnUntraced(function* (fake: FakeOmpProcess) {
+    const wakes =
+      yield* Queue.unbounded<ProviderContinuationRequests.ProviderContinuationRequest>();
+    const session = yield* openRuntime(fake, {
+      continuationRequests: { offer: (request) => Queue.offer(wakes, request).pipe(Effect.asVoid) },
+    });
+    return { session, wakes };
+  });
+
+  /** The orchestrator dispatches the continuation, which starts as a provider-created turn. */
+  const startContinuation = Effect.fnUntraced(function* (
+    session: OmpTestSession,
+    wake: ProviderContinuationRequests.ProviderContinuationRequest,
+    ordinal: number,
+  ) {
+    assert.isTrue(Option.isSome(yield* wake.dispatchIfCurrent!(Effect.void)));
+    yield* startTurn(session, { ordinal, continuation: true });
+  });
+
+  it.effect(
+    "ends the turn at its answer when omp continues the run for the advisor, and runs the rest as a continuation",
+    () =>
+      Effect.gen(function* () {
+        const fake = yield* makeFakeOmpProcess();
+        const { session, wakes } = yield* openWithWakes(fake);
+        const card = indexOfFrame(sameRun, isCardEnd);
+
+        yield* startTurn(session);
+        const prompt = yield* fake.takeCommand("prompt");
+        const run = answering(sameRun, prompt.id);
+        // Without session_settled, only the prompt's late prompt_result can end the continuation.
+        yield* emitAll(fake, run.slice(0, -1));
+        const answered = yield* session.takeEvent(isTerminal);
+        const wake = yield* Queue.take(wakes);
+        yield* startContinuation(session, wake, 2);
+        const followUp = yield* session.takeEvent(isTerminal);
+        yield* fake.emit(run.at(-1)!);
+        yield* runTurn(session, fake, { ordinal: 3 });
+
+        assert.deepStrictEqual(
+          session.seen.filter(isTerminal).map((event) => event.status),
+          ["completed", "completed", "completed"],
+        );
+        assert.deepStrictEqual(
+          assistantTexts(session.seen, answered.providerTurnId),
+          recordedReplies(sameRun.slice(0, card)),
+        );
+        assert.deepStrictEqual(
+          assistantTexts(session.seen, followUp.providerTurnId),
+          recordedReplies(sameRun.slice(card)),
+        );
+        assert.deepStrictEqual(advisorNotices(session.seen, answered.providerTurnId), []);
+        assert.deepStrictEqual(
+          advisorNotices(session.seen, followUp.providerTurnId),
+          recordedNotices(sameRun),
+        );
+        assert.strictEqual(wake.notification?.summary, "Advisor follow-up");
+        assert.lengthOf(commandsOf(fake, "prompt"), 2);
+        assert.deepStrictEqual(backgroundWorkPending(session.seen), []);
+        assert.isFalse(yield* session.runtime.hasPendingBackgroundWork!);
+      }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect(
+    "hands unread steers and an open dialog to the advisor continuation without losing any",
+    () =>
+      Effect.gen(function* () {
+        const lateSteerText = "Mention the guard.";
+        // omp acknowledges this steer only after the answer ended its turn.
+        const fake = yield* makeFakeOmpProcess({
+          reply: (command) =>
+            command.type === "prompt" && command.message === lateSteerText
+              ? FAKE_OMP_UNANSWERED
+              : undefined,
+        });
+        const { session, wakes } = yield* openWithWakes(fake);
+        const card = indexOfFrame(sameRun, isCardEnd);
+        const agentEnd = indexOfFrame(sameRun, (frame) => frame["type"] === "agent_end");
+        const dialogId = "15dbc451eb016398";
+        const steerText = "Keep it to two lines.";
+
+        yield* startTurn(session);
+        const prompt = yield* fake.takeCommand("prompt");
+        const firstTurn = (yield* session.takeEvent(isProviderTurnUpdate)).providerTurn.id;
+        yield* fake.emit({
+          type: "extension_ui_request",
+          id: dialogId,
+          method: "confirm",
+          title: "Deploy",
+          message: "Deploy to staging?",
+          timeout: 60_000,
+        });
+        const asked = yield* session.takeEvent(isRuntimeRequestUpdate);
+        yield* emitAll(fake, sameRun.slice(0, card + 1));
+        yield* session.runtime.steerTurn(steerInput(session, firstTurn, steerText));
+        const steer = yield* fake.takeCommand("prompt");
+        yield* session.takeEvent(isSteerUpdate);
+        yield* session.runtime.steerTurn(steerInput(session, firstTurn, lateSteerText));
+        const lateSteer = yield* fake.takeCommand("prompt");
+        yield* emitAll(fake, sameRun.slice(card + 1, agentEnd));
+        const answered = yield* session.takeEvent(isTerminal);
+        yield* fake.respond(lateSteer);
+        // Taken before the continuation starts, so the ack arrived while it was pending.
+        yield* session.takeEvent(isSteerUpdate);
+        yield* session.runtime.respondToRuntimeRequest({
+          requestId: asked.runtimeRequest.id,
+          answers: { [dialogId]: "yes" },
+        });
+        // omp delivers both steers at the continuation's next step, then yields every prompt.
+        yield* emitAll(fake, [
+          userMessageStart(steerText, true),
+          userMessageStart(lateSteerText, true),
+          ...assistantReply("Kept it to two lines and mentioned the guard."),
+          ...answering(sameRun.slice(agentEnd, -1), prompt.id),
+          promptResult(steer.id),
+          promptResult(lateSteer.id),
+        ]);
+        const wake = yield* Queue.take(wakes);
+        yield* startContinuation(session, wake, 2);
+        const followUp = yield* session.takeEvent(isTerminal);
+        yield* fake.emit(sameRun.at(-1)!);
+        yield* session.takeEvent(isBackgroundRelease);
+
+        assert.deepStrictEqual([answered.status, followUp.status], ["completed", "completed"]);
+        assert.deepStrictEqual(answered.retainedRuntimeRequestIds, [asked.runtimeRequest.id]);
+        assert.deepStrictEqual(runtimeRequestStatuses(session.seen), ["pending", "resolved"]);
+        assert.deepStrictEqual(
+          fake.frames().filter((frame) => frame.type === "extension_ui_response"),
+          [{ type: "extension_ui_response", id: dialogId, confirmed: true }],
+        );
+        const steerUpdates = session.seen.filter(isSteerUpdate);
+        assert.deepStrictEqual(
+          steerUpdates.map((event) => [event.messageId, event.status]),
+          [
+            [steerInput(session, firstTurn, steerText).message.messageId, "pending"],
+            [steerInput(session, firstTurn, lateSteerText).message.messageId, "pending"],
+            [steerInput(session, firstTurn, steerText).message.messageId, "completed"],
+            [steerInput(session, firstTurn, lateSteerText).message.messageId, "completed"],
+          ],
+        );
+        // The late steer's ack lands while the continuation is pending; both complete inside it.
+        assert.isAbove(session.seen.indexOf(steerUpdates[1]!), session.seen.indexOf(answered));
+        assert.isAbove(session.seen.indexOf(steerUpdates[2]!), session.seen.indexOf(answered));
+        assert.deepStrictEqual(assistantTexts(session.seen, followUp.providerTurnId), [
+          ...recordedReplies(sameRun.slice(card)),
+          "Kept it to two lines and mentioned the guard.",
+        ]);
+        assert.deepStrictEqual(backgroundWorkPending(session.seen), [true, false]);
+        assert.isFalse(yield* session.runtime.hasPendingBackgroundWork!);
+      }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect(
+    "shows a card omp keeps after the answer in that turn when the run does not continue",
+    () =>
+      Effect.gen(function* () {
+        const fake = yield* makeFakeOmpProcess();
+        const { session, wakes } = yield* openWithWakes(fake);
+
+        yield* startTurn(session);
+        const prompt = yield* fake.takeCommand("prompt");
+        yield* emitAll(fake, answering(kept, prompt.id));
+        const terminal = yield* session.takeEvent(isTerminal);
+
+        assert.strictEqual(terminal.status, "completed");
+        assert.deepStrictEqual(
+          assistantTexts(session.seen, terminal.providerTurnId),
+          recordedReplies(kept),
+        );
+        assert.deepStrictEqual(
+          advisorNotices(session.seen, terminal.providerTurnId),
+          recordedNotices(kept),
+        );
+        assert.strictEqual(yield* Queue.size(wakes), 0);
+      }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("keeps the turn whole when omp continues on a steer that follows a kept card", () =>
+    Effect.gen(function* () {
+      const fake = yield* makeFakeOmpProcess();
+      const { session, wakes } = yield* openWithWakes(fake);
+      const card = indexOfFrame(kept, isCardEnd);
+      const steerText = "Also say how to call it.";
+
+      yield* startTurn(session);
+      const prompt = yield* fake.takeCommand("prompt");
+      const firstTurn = (yield* session.takeEvent(isProviderTurnUpdate)).providerTurn.id;
+      yield* emitAll(fake, kept.slice(0, card + 1));
+      yield* session.runtime.steerTurn(steerInput(session, firstTurn, steerText));
+      const steer = yield* fake.takeCommand("prompt");
+      yield* emitAll(fake, [
+        userMessageStart(steerText, true),
+        ...assistantReply("Call it as divide(6, 3)."),
+        ...answering(kept.slice(card + 1), prompt.id),
+        promptResult(steer.id),
+      ]);
+      const terminal = yield* session.takeEvent(isTerminal);
+
+      assert.strictEqual(terminal.status, "completed");
+      assert.deepStrictEqual(assistantTexts(session.seen, terminal.providerTurnId), [
+        ...recordedReplies(kept),
+        "Call it as divide(6, 3).",
+      ]);
+      assert.deepStrictEqual(
+        advisorNotices(session.seen, terminal.providerTurnId),
+        recordedNotices(kept),
+      );
+      assert.strictEqual(yield* Queue.size(wakes), 0);
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("shows the advisor's notes while the agent works as notices in one turn", () =>
+    Effect.gen(function* () {
+      const fake = yield* makeFakeOmpProcess();
+      const { session, wakes } = yield* openWithWakes(fake);
+
+      yield* startTurn(session);
+      const prompt = yield* fake.takeCommand("prompt");
+      yield* emitAll(fake, answering(midTurn, prompt.id));
+      const terminal = yield* session.takeEvent(isTerminal);
+
+      assert.lengthOf(session.seen.filter(isTerminal), 1);
+      assert.deepStrictEqual(
+        assistantTexts(session.seen, terminal.providerTurnId),
+        recordedReplies(midTurn),
+      );
+      assert.deepStrictEqual(advisorNotices(session.seen), recordedNotices(midTurn));
+      assert.deepStrictEqual(
+        recordedNotices(midTurn).map(([, level]) => level),
+        ["warning", "warning", "warning", "info"],
+      );
+      assert.strictEqual(yield* Queue.size(wakes), 0);
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("shows the card in the run omp starts for it after the turn settled", () =>
+    Effect.gen(function* () {
+      const fake = yield* makeFakeOmpProcess();
+      const { session, wakes } = yield* openWithWakes(fake);
+      const wakeStart = indexOfFrame(wakeRun, (frame) => frame["type"] === "agent_start", 1);
+
+      yield* startTurn(session);
+      const prompt = yield* fake.takeCommand("prompt");
+      yield* emitAll(fake, answering(wakeRun.slice(0, wakeStart), prompt.id));
+      const answered = yield* session.takeEvent(isTerminal);
+      yield* emitAll(fake, wakeRun.slice(wakeStart));
+      const wake = yield* Queue.take(wakes);
+      yield* startContinuation(session, wake, 2);
+      const followUp = yield* session.takeEvent(isTerminal);
+
+      assert.deepStrictEqual(
+        assistantTexts(session.seen, answered.providerTurnId),
+        recordedReplies(wakeRun.slice(0, wakeStart)),
+      );
+      assert.deepStrictEqual(advisorNotices(session.seen, answered.providerTurnId), []);
+      assert.deepStrictEqual(
+        advisorNotices(session.seen, followUp.providerTurnId),
+        recordedNotices(wakeRun),
+      );
+      assert.deepStrictEqual(
+        assistantTexts(session.seen, followUp.providerTurnId),
+        recordedReplies(wakeRun.slice(wakeStart)),
+      );
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("shows a card omp keeps while no turn runs with the next message", () =>
+    Effect.gen(function* () {
+      const fake = yield* makeFakeOmpProcess();
+      const session = yield* openRuntime(fake);
+      const card = indexOfFrame(kept, isCardEnd);
+
+      const first = yield* runTurn(session, fake);
+      yield* emitAll(fake, kept.slice(card - 1, card + 1));
+      // Handled after the card, so the card arrived while no turn ran.
+      yield* fake.emit({
+        type: "session_info_update",
+        sessionId: FAKE_OMP_IDLE_STATE.sessionId,
+        title: "Divide helper",
+      });
+      yield* session.takeEvent(
+        (event): event is AdapterEvent => event.type === "provider_thread.updated",
+      );
+      const next = yield* runTurn(session, fake, { ordinal: 2 });
+
+      assert.deepStrictEqual(advisorNotices(session.seen, first.providerTurnId), []);
+      assert.deepStrictEqual(
+        advisorNotices(session.seen, next.providerTurnId),
+        recordedNotices(kept),
+      );
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
 });
