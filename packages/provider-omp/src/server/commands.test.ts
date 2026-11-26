@@ -5,6 +5,7 @@ import contextOutput from "./__fixtures__/commands/context-command-output.json" 
 import {
   classifyOmpSlashInput,
   isOmpCommandInvocation,
+  OMP_GOAL_SLASH_COMMAND,
   OMP_INTERCEPTED_COMMANDS,
   parseOmpAvailableCommands,
   stripAnsi,
@@ -78,7 +79,25 @@ describe("parseOmpAvailableCommands", () => {
         { name: "init", description: "Shadowed", source: "custom" },
         { name: "  ", description: "Blank", source: "custom" },
       ]).slashCommands,
-    ).toEqual([{ name: "init", description: "Generate AGENTS.md" }]);
+    ).toEqual([{ name: "init", description: "Generate AGENTS.md" }, OMP_GOAL_SLASH_COMMAND]);
+  });
+
+  it("offers T3's /goal, which omp's catalog lacks, in place of any catalog command of that name", () => {
+    expect(catalog.commands.map((command) => command.name)).not.toContain("goal");
+    const goals = (commands: typeof catalog.commands) =>
+      parseOmpAvailableCommands(commands).slashCommands.filter(
+        (command) => command.name === "goal",
+      );
+    expect(goals(catalog.commands)).toEqual([
+      {
+        name: "goal",
+        description: "Set a goal OMP keeps working toward until it is done",
+        input: { hint: "Objective, or pause, resume, clear" },
+      },
+    ]);
+    expect(
+      goals([{ name: "goal", description: "An extension's goal command", source: "extension" }]),
+    ).toEqual([OMP_GOAL_SLASH_COMMAND]);
   });
 });
 
@@ -137,6 +156,14 @@ describe("classifyOmpSlashInput", () => {
       "/plan",
       "/plan",
       { kind: "intercept", notice: "Plan mode is not available for omp in T3 Code." },
+    ],
+    [
+      "/goal, which reaches it only with attachments",
+      "/goal ship it",
+      {
+        kind: "intercept",
+        notice: "/goal takes text only. Send it again without attachments.",
+      },
     ],
   ])("classifies %s", (_label, text, disposition) => {
     expect(classifyOmpSlashInput(text)).toEqual(disposition);

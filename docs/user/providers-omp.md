@@ -71,8 +71,8 @@ mode applies only to T3 Code's sessions, so OMP in your terminal keeps its own d
 access**.
 
 Changing the mode stops the thread's OMP process. Your next message starts OMP in the new mode and
-reopens the same conversation. While OMP still runs background commands, T3 Code refuses the change
-until they finish or you press **Stop**.
+reopens the same conversation. While OMP still runs background commands or subagents, T3 Code
+refuses the change until they finish or you press **Stop**.
 
 Approvals show OMP's own choices: approve once, approve that tool for the rest of the session when
 OMP offers it, or **Deny**. To deny with an explanation, type a reply while the approval is pending;
@@ -112,13 +112,54 @@ Some commands show a notice instead of running:
 
 A message you send while OMP is working joins the running turn when OMP finishes its current step,
 without stopping running tools. It can include images. A slash command sent while OMP is working
-waits and runs as its own turn.
+waits and runs as its own turn, apart from the `/goal` commands described under [Goals](#goals).
+
+## To-do Lists
+
+When OMP tracks its work with its todo tool, the thread shows the list in one row instead of those
+tool calls. The row appears where OMP first wrote the list in that turn and updates as OMP works
+through it; open it to see every step. Tasks from all of OMP's phases appear in one list, and a
+task OMP drops counts as done, as it does in OMP.
+
+Changes you make with `/todo` appear the next time OMP updates the list itself.
+
+## Subagents
+
+When OMP hands work to subagents with its task tool, each subagent appears as a row under that
+tool call. The row shows what the subagent is doing and, once it finishes, its result. Subagents
+can keep working after OMP's turn ends; their rows stay open until they finish. Subagents have no
+threads of their own in T3 Code, so you cannot open one or message it. Subagents that a subagent
+starts do not get rows of their own.
+
+**Stop** stops every subagent OMP is running for the thread, including ones an earlier turn
+started. You cannot stop one subagent on its own.
+
+Subagents never ask for approval. In **Supervised**, OMP asks before it starts them, and approving
+that lets them run commands and change files without asking. A tool your OMP rules say to ask
+about fails inside a subagent instead.
+
+## Goals
+
+Send `/goal` followed by what "done" means, for example `/goal all tests in packages/api pass`.
+OMP works toward the goal in turns of its own until it marks the goal done. The line at the end of
+the thread shows the goal and the tokens it has used.
+
+- `/goal` alone shows the current goal, and `/goal clear` removes it. A new `/goal` replaces the
+  current one.
+- `/goal pause` and **Stop** pause the goal, and `/goal resume` continues it. OMP also pauses an
+  active goal when its session restarts, for example after you change the permission mode.
+- A goal with a token budget stops once OMP has used the budget, and resuming it does not continue
+  the work. Clear the goal and set it again to keep going.
+- Sending a new goal, or `/goal resume`, while OMP works stops the current turn and starts the goal,
+  unless you queue it. `/goal clear` and `/goal pause` stop the turn only while it works on the
+  goal.
 
 ## Rewind and Fork
 
-**Edit from here** also rewinds OMP's own conversation to before that message. Forking a thread from
-a message gives the fork OMP's own copy of the conversation up to that message, including a fork
-into another worktree. Wait for OMP to finish its turn before you rewind or fork.
+**Edit from here** also rewinds OMP's own conversation to before that message, and the goal goes
+back to how it was at that point. Forking a thread from a message gives the fork OMP's own copy of
+the conversation up to that message, including a fork into another worktree. Wait for OMP to
+finish its turn before you rewind or fork.
 
 ## Sessions
 
@@ -143,8 +184,7 @@ writes for T3 Code, such as thread titles, is not counted.
 - Secret input prompts are declined, and forms with password fields are submitted with their
   defaults.
 - T3 Code needs OMP 19.1.1 or newer.
-- OMP's plan mode and goals are not available. Work OMP hands to its own subagents shows as one tool
-  call, not as child threads.
+- OMP's plan mode is not available. OMP's subagents show as rows, not as child threads.
 - With `--profile`, T3 Code keeps the `APPEND_SYSTEM.md` from the project or your default OMP
   folder, not one from the profile.
 

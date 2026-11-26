@@ -44,15 +44,20 @@ import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
 import type { OmpSettings } from "../settings.ts";
 import frames from "./__fixtures__/adapter/frames.json" with { type: "json" };
+import goalFrames from "./__fixtures__/goal/frames.json" with { type: "json" };
+import subagentFrames from "./__fixtures__/subagents/frames.json" with { type: "json" };
+import todoFrames from "./__fixtures__/todos/frames.json" with { type: "json" };
 import { makeOmpAdapterV2, OMP_PROVIDER, type OmpAdapterV2Options } from "./adapter.ts";
 import { ompOverlayPath, renderOmpUnattendedOverlay } from "./launch.ts";
 import {
   FAKE_OMP_IDLE_STATE,
   FAKE_OMP_SESSION_FILE,
   FAKE_OMP_UNANSWERED,
+  fakeOmpFailure,
   fakeOmpSuccess,
   makeFakeOmpProcess,
   type FakeOmpProcess,
+  type FakeOmpReply,
   type FakeOmpScript,
 } from "./rpc.testkit.ts";
 import { ompSessionDirForCwd } from "./sessions.ts";
@@ -433,6 +438,78 @@ const lastToolRowStatus = (seen: ReadonlyArray<AdapterEvent>, toolCallId: string
     )
     .at(-1);
 
+const nativeIdOf = (event: AdapterEvent) => {
+  if (event.type === "turn_item.updated") return event.turnItem.nativeItemRef?.nativeId;
+  return event.type === "node.updated" ? event.node.nativeItemRef?.nativeId : undefined;
+};
+
+type SubagentUpdate = Extract<AdapterEvent, { readonly type: "subagent.updated" }>;
+
+/** Updates of the row for omp child `childId`, which omp names by its id. */
+const isSubagentUpdateOf =
+  (childId: string) =>
+  (event: AdapterEvent): event is SubagentUpdate =>
+    event.type === "subagent.updated" && event.subagent.nativeTaskRef?.nativeId === childId;
+
+const subagentUpdates = (seen: ReadonlyArray<AdapterEvent>, childId: string) =>
+  seen.filter(isSubagentUpdateOf(childId)).map((event) => event.subagent);
+
+const lastSubagent = (seen: ReadonlyArray<AdapterEvent>, childId: string) =>
+  subagentUpdates(seen, childId).at(-1);
+
+/** What a subagent row shows and where it hangs. */
+const subagentRow = (subagent: SubagentUpdate["subagent"] | undefined) =>
+  subagent === undefined
+    ? undefined
+    : {
+        status: subagent.status,
+        title: subagent.title,
+        result: subagent.result,
+        origin: subagent.origin,
+        childThreadId: subagent.childThreadId,
+        runId: subagent.runId,
+        parentNodeId: subagent.parentNodeId,
+      };
+
+const nodeIdOf = (seen: ReadonlyArray<AdapterEvent>, nativeItemId: string) => {
+  const update = seen.find(
+    (event) => event.type === "node.updated" && nativeIdOf(event) === nativeItemId,
+  );
+  if (update?.type !== "node.updated") throw new Error(`omp item ${nativeItemId} has no node`);
+  return update.node.id;
+};
+
+/** Each subagent node update as [omp child id, status]. */
+const subagentNodeStatuses = (seen: ReadonlyArray<AdapterEvent>) =>
+  seen.flatMap((event) =>
+    event.type === "node.updated" && event.node.kind === "subagent"
+      ? [[String(nativeIdOf(event)).split(":").at(-1), event.node.status]]
+      : [],
+  );
+
+const backgroundWorkPending = (seen: ReadonlyArray<AdapterEvent>) =>
+  seen.flatMap((event) => (event.type === "background_work.updated" ? [event.pending] : []));
+
+const todoPlans = (seen: ReadonlyArray<AdapterEvent>) =>
+  seen.flatMap((event) => (event.type === "plan.updated" ? [event.plan] : []));
+
+const todoListItems = (seen: ReadonlyArray<AdapterEvent>) =>
+  seen.flatMap((event) =>
+    event.type === "turn_item.updated" && event.turnItem.type === "todo_list"
+      ? [event.turnItem]
+      : [],
+  );
+
+/** Each todo snapshot emits its node, then its plan, then its turn item. */
+const TODO_PROJECTION = ["node", "plan", "item"] as const;
+
+const todoProjectionStep = (event: AdapterEvent): ReadonlyArray<string> => {
+  if (event.type === "node.updated") return event.node.kind === "todo_list" ? ["node"] : [];
+  if (event.type === "plan.updated") return ["plan"];
+  const isTodoItem = event.type === "turn_item.updated" && event.turnItem.type === "todo_list";
+  return isTodoItem ? ["item"] : [];
+};
+
 const runtimeRequestStatuses = (seen: ReadonlyArray<AdapterEvent>) =>
   seen.flatMap((event) =>
     event.type === "runtime_request.updated" ? [event.runtimeRequest.status] : [],
@@ -755,11 +832,12 @@ describe("OmpAdapterV2", () => {
       assert.deepStrictEqual(
         fake
           .commands()
-          .slice(0, 5)
+          .slice(0, 6)
           .map((command) => command.type),
         [
           "negotiate_protocol",
           "set_event_filter",
+          "set_subagent_subscription",
           "set_ask_dialog",
           "set_interrupt_mode",
           "set_host_tools",
@@ -1142,17 +1220,18 @@ describe("OmpAdapterV2", () => {
   );
 
   it.effect(
-    "cancels one subagent at a time, since omp answers a cancel once its child stopped",
+    "sends every subagent's cancel at once, so omp cancels them all after Stop stops waiting",
     () =>
       Effect.gen(function* () {
+        const children = [frames.runningSubagent.id, "Quick", "Slow"];
         const fake = yield* makeFakeOmpProcess({
           reply: (command) =>
             command.type === "cancel_subagent"
               ? FAKE_OMP_UNANSWERED
-              : subagentReply(command, [
-                  frames.runningSubagent,
-                  { ...frames.runningSubagent, id: "Quick" },
-                ]),
+              : subagentReply(
+                  command,
+                  children.map((id) => ({ ...frames.runningSubagent, id })),
+                ),
         });
         const session = yield* openRuntime(fake);
         yield* startTurn(session);
@@ -1165,25 +1244,23 @@ describe("OmpAdapterV2", () => {
             providerTurnId: started.providerTurn.id,
           })
           .pipe(Effect.forkChild({ startImmediately: true }));
-        const first = yield* fake.takeCommand("cancel_subagent");
-        // Writes reach omp in order, so once this rename is answered a second cancel would show.
+        yield* fake.takeCommand("cancel_subagent");
+        // Writes reach omp in order, so once this rename is answered every cancel sent shows.
         yield* session.runtime.applyThreadTitle!({
           providerThread: session.providerThread,
           title: "write barrier",
         });
-        assert.lengthOf(commandsOf(fake, "cancel_subagent"), 1);
-        yield* fake.respond(first, frames.cancelSubagentResult);
-        yield* fake.respond(
-          yield* fake.takeCommand("cancel_subagent"),
-          frames.cancelSubagentResult,
-        );
+        const sentBeforeAnyAnswer = commandsOf(fake, "cancel_subagent").length;
+        // omp answers each cancel about 1.3 s after it (STG/03:117-132); none answers in time.
+        yield* TestClock.adjust(Duration.seconds(OMP_TEST_STOP_SECONDS));
         yield* Fiber.join(stop);
         yield* fake.emit(promptResult(prompt.id, { status: "aborted" }));
 
         assert.strictEqual((yield* session.takeEvent(isTerminal)).status, "interrupted");
+        assert.strictEqual(sentBeforeAnyAnswer, children.length);
         assert.deepStrictEqual(
           commandsOf(fake, "cancel_subagent").map((command) => command.subagentId),
-          [frames.runningSubagent.id, "Quick"],
+          children,
         );
       }).pipe(Effect.scoped, Effect.provide(layerTest)),
   );
@@ -1508,6 +1585,746 @@ describe("OmpAdapterV2", () => {
         ["running", "completed"],
       );
     }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("shows omp's todo snapshots as the turn's todo list instead of tool rows", () =>
+    Effect.gen(function* () {
+      const fake = yield* makeFakeOmpProcess();
+      const session = yield* openRuntime(fake);
+      const calls = Object.values(todoFrames.createCompleteDrop);
+
+      yield* startTurn(session);
+      const prompt = yield* fake.takeCommand("prompt");
+      yield* emitAll(fake, calls);
+      yield* fake.emit(promptResult(prompt.id));
+      yield* session.takeEvent(isTerminal);
+
+      const callIds = new Set(calls.map((call) => call.toolCallId));
+      assert.isFalse(session.seen.some((event) => callIds.has(nativeIdOf(event) ?? "")));
+      assert.deepStrictEqual(
+        session.seen.flatMap(todoProjectionStep),
+        calls.flatMap((call) => (call.type === "tool_execution_end" ? TODO_PROJECTION : [])),
+      );
+      const plans = todoPlans(session.seen);
+      assert.deepStrictEqual(
+        plans.map((plan) => plan.status),
+        ["active", "active", "active", "completed"],
+      );
+      const items = todoListItems(session.seen);
+      assert.strictEqual(new Set(plans.map((plan) => plan.id)).size, 1);
+      assert.isTrue(items.every((item) => item.planId === plans[0]?.id));
+      assert.strictEqual(new Set(items.map((item) => item.id)).size, 1);
+      assert.deepStrictEqual(
+        items.at(-1)?.steps.map((step) => [step.text, step.status]),
+        [
+          ["Alpha", "completed"],
+          ["Beta", "completed"],
+          ["Gamma", "completed"],
+        ],
+      );
+      assert.isTrue(session.runtime.providerSession.capabilities.planning.emitsTodoList);
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect(
+    "supersedes the last turn's todo plan and skips views, failed calls and reminders",
+    () =>
+      Effect.gen(function* () {
+        const fake = yield* makeFakeOmpProcess();
+        const session = yield* openRuntime(fake);
+        const { initStart, initEnd } = todoFrames.createCompleteDrop;
+        yield* startTurn(session);
+        const first = yield* fake.takeCommand("prompt");
+        yield* emitAll(fake, [initStart, initEnd]);
+        yield* fake.emit(promptResult(first.id));
+        yield* session.takeEvent(isTerminal);
+        const [firstPlan] = todoPlans(session.seen);
+        const [firstItem] = todoListItems(session.seen);
+        const firstTurnEvents = session.seen.length;
+
+        yield* startTurn(session, { ordinal: 2 });
+        const second = yield* fake.takeCommand("prompt");
+        yield* emitAll(fake, Object.values(todoFrames.twoPhases));
+        yield* fake.emit(promptResult(second.id));
+        yield* session.takeEvent(isTerminal);
+
+        const secondTurn = session.seen.slice(firstTurnEvents);
+        assert.deepStrictEqual(
+          todoPlans(secondTurn).map((plan) => [plan.id === firstPlan?.id, plan.status]),
+          [
+            [true, "superseded"],
+            [false, "active"],
+            [false, "active"],
+          ],
+        );
+        const items = todoListItems(secondTurn);
+        assert.lengthOf(items, 2);
+        assert.notStrictEqual(items[0]?.id, firstItem?.id);
+        assert.strictEqual(items.at(-1)?.explanation, "Build → Ship");
+        assert.deepStrictEqual(
+          items.at(-1)?.steps.map((step) => step.status),
+          ["completed", "running", "pending"],
+        );
+      }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("shows no row for a todo call Stop cut off before its snapshot", () =>
+    Effect.gen(function* () {
+      const { initStart } = todoFrames.createCompleteDrop;
+      const fake = yield* makeFakeOmpProcess();
+      const session = yield* openRuntime(fake);
+      yield* startTurn(session);
+      const prompt = yield* fake.takeCommand("prompt");
+      const started = yield* session.takeEvent(isProviderTurnUpdate);
+      yield* emitAll(fake, [frames.bashStart, initStart]);
+
+      yield* session.runtime.interruptTurn({
+        providerThread: session.providerThread,
+        providerTurnId: started.providerTurn.id,
+      });
+      yield* fake.emit(promptResult(prompt.id, { status: "aborted" }));
+      const terminal = yield* session.takeEvent(isTerminal);
+
+      assert.strictEqual(terminal.status, "interrupted");
+      assert.strictEqual(
+        lastToolRowStatus(session.seen, frames.bashStart.toolCallId),
+        "interrupted",
+      );
+      assert.isUndefined(lastToolRowStatus(session.seen, initStart.toolCallId));
+      assert.lengthOf(todoListItems(session.seen), 0);
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect(
+    "shows a task call's children as subagent rows under it and interrupts the ones Stop ends",
+    () =>
+      Effect.gen(function* () {
+        const { parentAbort } = subagentFrames;
+        const taskCallId = parentAbort.taskStart.toolCallId;
+        const fake = yield* makeFakeOmpProcess({
+          reply: (command) =>
+            subagentReply(command, [{ id: "Napper", parentToolCallId: taskCallId }]),
+        });
+        const session = yield* openRuntime(fake);
+        yield* startTurn(session);
+        const prompt = yield* fake.takeCommand("prompt");
+        const started = yield* session.takeEvent(isProviderTurnUpdate);
+        // omp reports both children before the task call that spawns them (P2:62-79).
+        yield* emitAll(fake, [
+          parentAbort.napperStarted,
+          parentAbort.napperRunning,
+          parentAbort.quickStarted,
+          parentAbort.quickRunning,
+          parentAbort.taskStart,
+          parentAbort.taskEnd,
+          parentAbort.napperDescribed,
+          parentAbort.quickDescribed,
+          parentAbort.waitStart,
+          parentAbort.napperBash,
+          parentAbort.quickCompletedProgress,
+          parentAbort.quickCompleted,
+          parentAbort.quickJobUpdate,
+        ]);
+        yield* session.takeEvent(isSubagentUpdateOf("Quick"));
+        yield* session.takeEvent(isSubagentUpdateOf("Quick"));
+
+        yield* session.runtime.interruptTurn({
+          providerThread: session.providerThread,
+          providerTurnId: started.providerTurn.id,
+        });
+        yield* emitAll(fake, [
+          parentAbort.waitAborted,
+          parentAbort.quickResultStart,
+          parentAbort.quickResultEnd,
+          promptResult(prompt.id, { status: "aborted" }),
+          frames.sessionSettled,
+        ]);
+        const terminal = yield* session.takeEvent(isTerminal);
+        yield* session.takeEvent(isBackgroundRelease);
+
+        // Clients order rows by arrival, so the call's row must arrive before its children's.
+        const firstTaskRow = session.seen.findIndex(
+          (event) => event.type === "turn_item.updated" && nativeIdOf(event) === taskCallId,
+        );
+        const firstSubagentRow = session.seen.findIndex(
+          (event) => event.type === "turn_item.updated" && event.turnItem.type === "subagent",
+        );
+        const underTaskCall = {
+          origin: "provider_native" as const,
+          childThreadId: null,
+          runId: RunId.make(`run:${THREAD_ID}:1`),
+          parentNodeId: nodeIdOf(session.seen, taskCallId),
+        };
+        assert.strictEqual(terminal.status, "interrupted");
+        assert.deepStrictEqual(
+          commandsOf(fake, "set_subagent_subscription").map((command) => command.level),
+          ["progress"],
+        );
+        assert.deepStrictEqual(subagentRow(lastSubagent(session.seen, "Napper")), {
+          ...underTaskCall,
+          status: "interrupted",
+          title: "Run sleep command and report its output",
+          result: null,
+        });
+        assert.deepStrictEqual(subagentRow(lastSubagent(session.seen, "Quick")), {
+          ...underTaskCall,
+          status: "completed",
+          title: "Run echo quick-done command and report output",
+          result: "quick-done",
+        });
+        assert.strictEqual(
+          lastSubagent(session.seen, "Quick")?.prompt,
+          parentAbort.quickRunning.payload.assignment,
+        );
+        assert.deepStrictEqual(subagentNodeStatuses(session.seen), [
+          ["Napper", "running"],
+          ["Quick", "running"],
+          ["Quick", "completed"],
+          ["Napper", "interrupted"],
+        ]);
+        assert.isAtLeast(firstTaskRow, 0);
+        assert.isBelow(firstTaskRow, firstSubagentRow);
+        assert.strictEqual(lastToolRowStatus(session.seen, taskCallId), "interrupted");
+        assert.isTrue(session.runtime.providerSession.capabilities.subagents.supportsSubagents);
+      }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("coalesces a child's progress to one update per half second and keeps the latest", () =>
+    Effect.gen(function* () {
+      const { parentAbort } = subagentFrames;
+      const fake = yield* makeFakeOmpProcess();
+      const session = yield* openRuntime(fake);
+      yield* startTurn(session);
+      yield* fake.takeCommand("prompt");
+      yield* emitAll(fake, [
+        parentAbort.napperStarted,
+        parentAbort.napperRunning,
+        parentAbort.napperDescribed,
+        parentAbort.napperBash,
+        parentAbort.napperBashAgain,
+        parentAbort.taskStart,
+      ]);
+      // The task call's start shows omp handled every progress frame sent before it.
+      yield* session.takeEvent(
+        (event): event is AdapterEvent =>
+          event.type === "turn_item.updated" &&
+          event.turnItem.type === "dynamic_tool" &&
+          JSON.stringify(event.turnItem.input) === JSON.stringify(parentAbort.taskStart.args),
+      );
+      const beforeFlush = subagentUpdates(session.seen, "Napper");
+
+      yield* TestClock.adjust(Duration.millis(500));
+      const flushed = (yield* session.takeEvent(isSubagentUpdateOf("Napper"))).subagent;
+      yield* TestClock.adjust(Duration.seconds(5));
+      yield* fake.emit(parentAbort.napperBashAgain);
+      yield* emitAll(fake, [parentAbort.taskEnd]);
+      yield* session.takeEvent(
+        (event): event is AdapterEvent =>
+          event.type === "turn_item.updated" &&
+          nativeIdOf(event) === parentAbort.taskEnd.toolCallId &&
+          event.turnItem.status === "running" &&
+          event.turnItem.completedAt === null &&
+          event.turnItem.type === "dynamic_tool" &&
+          event.turnItem.output !== undefined,
+      );
+
+      assert.deepStrictEqual(
+        beforeFlush.map((subagent) => [subagent.title, subagent.prompt, subagent.progress]),
+        [["Napper", "", undefined]],
+      );
+      assert.deepStrictEqual(
+        [flushed.title, flushed.prompt, flushed.progress],
+        [
+          "Run sleep command and report its output",
+          parentAbort.napperRunning.payload.assignment,
+          "bash: sleep 15; echo nap-done",
+        ],
+      );
+      assert.lengthOf(subagentUpdates(session.seen, "Napper"), 2);
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("takes a waited child's result from the wait call's end", () =>
+    Effect.gen(function* () {
+      const { waited } = subagentFrames;
+      const fake = yield* makeFakeOmpProcess();
+      const session = yield* openRuntime(fake);
+      yield* startTurn(session);
+      const prompt = yield* fake.takeCommand("prompt");
+      yield* emitAll(fake, [
+        waited.counterStarted,
+        waited.counterRunning,
+        waited.taskStart,
+        waited.taskEnd,
+        waited.waitStart,
+        waited.counterCompleted,
+        waited.taskCompletion,
+        waited.waitEnd,
+      ]);
+      yield* fake.emit(promptResult(prompt.id));
+      yield* session.takeEvent(isTerminal);
+
+      const counter = lastSubagent(session.seen, "Counter");
+      assert.deepStrictEqual([counter?.status, counter?.result], ["completed", "2"]);
+      assert.isNotNull(counter?.completedAt);
+      assert.deepStrictEqual(backgroundWorkPending(session.seen), [true, false]);
+      assert.lengthOf(commandsOf(fake, "get_subagent_messages"), 0);
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect(
+    "holds a finished child's row past its turn until omp delivers its result in a wake",
+    () =>
+      Effect.gen(function* () {
+        const { detachedNoWait } = subagentFrames;
+        const wakes =
+          yield* Queue.unbounded<ProviderContinuationRequests.ProviderContinuationRequest>();
+        const fake = yield* makeFakeOmpProcess();
+        const session = yield* openRuntime(fake, {
+          continuationRequests: {
+            offer: (request) => Queue.offer(wakes, request).pipe(Effect.asVoid),
+          },
+        });
+        yield* startTurn(session);
+        const prompt = yield* fake.takeCommand("prompt");
+        yield* emitAll(fake, [
+          detachedNoWait.listerStarted,
+          detachedNoWait.listerRunning,
+          detachedNoWait.taskStart,
+          detachedNoWait.taskEnd,
+        ]);
+        yield* fake.emit({ ...frames.yieldedPromptResult, id: prompt.id });
+        yield* session.takeEvent(isTerminal);
+        yield* emitAll(fake, [
+          detachedNoWait.listerBash,
+          detachedNoWait.listerCompletedProgress,
+          detachedNoWait.listerCompleted,
+          detachedNoWait.taskCompletion,
+        ]);
+        const ended = (yield* session.takeEvent(
+          (event): event is SubagentUpdate =>
+            isSubagentUpdateOf("Lister")(event) && event.subagent.status === "completed",
+        )).subagent;
+        yield* fake.emit(detachedNoWait.wakeAgentStart);
+        const wake = yield* Queue.take(wakes);
+        assert.isTrue(yield* session.runtime.hasPendingBackgroundWork!);
+        yield* emitAll(fake, [
+          detachedNoWait.resultStart,
+          detachedNoWait.resultEnd,
+          detachedNoWait.sessionSettled,
+        ]);
+        yield* wake.dispatchIfCurrent!(Effect.void);
+        yield* startTurn(session, { ordinal: 2, continuation: true });
+        yield* session.takeEvent(isTerminal);
+
+        const lister = lastSubagent(session.seen, "Lister");
+        const resultIndex = session.seen.findLastIndex(isSubagentUpdateOf("Lister"));
+        const releaseIndex = session.seen.findIndex(isBackgroundRelease);
+        assert.isNull(ended.result);
+        assert.deepStrictEqual(
+          [lister?.status, lister?.runId, lister?.result],
+          [
+            "completed",
+            RunId.make(`run:${THREAD_ID}:1`),
+            "Output of `sleep 4; ls -A` in the current directory:\n\n- `.git`\n- `NOTES.md`",
+          ],
+        );
+        assert.deepStrictEqual(backgroundWorkPending(session.seen), [true, false]);
+        assert.isTrue(resultIndex < releaseIndex);
+        assert.isFalse(yield* session.runtime.hasPendingBackgroundWork!);
+      }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("reads a child's result from its transcript when omp settles without one", () =>
+    Effect.gen(function* () {
+      const { waited } = subagentFrames;
+      const fake = yield* makeFakeOmpProcess({
+        reply: (command) =>
+          command.type === "get_subagent_messages"
+            ? fakeOmpSuccess(waited.messagesReply)
+            : undefined,
+      });
+      const session = yield* openRuntime(fake);
+      yield* startTurn(session);
+      const prompt = yield* fake.takeCommand("prompt");
+      yield* emitAll(fake, [
+        waited.counterStarted,
+        waited.counterRunning,
+        waited.taskStart,
+        waited.taskEnd,
+        waited.counterCompleted,
+        waited.taskCompletion,
+      ]);
+      yield* fake.emit(promptResult(prompt.id));
+      yield* session.takeEvent(isTerminal);
+      yield* fake.emit(frames.sessionSettled);
+      yield* session.takeEvent(isBackgroundRelease);
+
+      assert.deepStrictEqual(
+        commandsOf(fake, "get_subagent_messages").map((command) => command.subagentId),
+        ["Counter"],
+      );
+      const counter = lastSubagent(session.seen, "Counter");
+      assert.deepStrictEqual([counter?.status, counter?.result], ["completed", "2"]);
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("shows a child omp cancelled without a Stop from T3 as cancelled", () =>
+    Effect.gen(function* () {
+      const { cancelled } = subagentFrames;
+      const fake = yield* makeFakeOmpProcess();
+      const session = yield* openRuntime(fake);
+      yield* startTurn(session);
+      const prompt = yield* fake.takeCommand("prompt");
+      yield* emitAll(fake, [
+        cancelled.sleeperStarted,
+        cancelled.sleeperRunning,
+        cancelled.sleeperAborted,
+        cancelled.sleeperResultEnd,
+      ]);
+      yield* fake.emit(promptResult(prompt.id));
+      yield* session.takeEvent(isTerminal);
+
+      const sleeper = lastSubagent(session.seen, "Sleeper");
+      assert.deepStrictEqual(
+        [sleeper?.status, sleeper?.result],
+        ["cancelled", "(no output) after 2 req"],
+      );
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("shows a child a later turn's Stop cancels as interrupted", () =>
+    Effect.gen(function* () {
+      const { stopCancel } = subagentFrames;
+      const fake = yield* makeFakeOmpProcess({
+        reply: (command) =>
+          command.type === "cancel_subagent"
+            ? fakeOmpSuccess(frames.cancelSubagentResult, {
+                after: [stopCancel.napperAborted, stopCancel.napperResultEnd],
+              })
+            : subagentReply(command, [{ id: "Napper" }]),
+      });
+      const session = yield* openRuntime(fake);
+      yield* startTurn(session);
+      const first = yield* fake.takeCommand("prompt");
+      yield* emitAll(fake, [stopCancel.taskStart, stopCancel.napperStarted, stopCancel.taskEnd]);
+      yield* fake.emit({ ...frames.yieldedPromptResult, id: first.id });
+      yield* session.takeEvent(isTerminal);
+
+      yield* startTurn(session, { ordinal: 2 });
+      const second = yield* fake.takeCommand("prompt");
+      const secondTurn = yield* session.takeEvent(isProviderTurnUpdate);
+      yield* session.runtime.interruptTurn({
+        providerThread: session.providerThread,
+        providerTurnId: secondTurn.providerTurn.id,
+      });
+      yield* fake.emit(promptResult(second.id, { status: "aborted" }));
+      yield* session.takeEvent(isTerminal);
+
+      const napper = lastSubagent(session.seen, "Napper");
+      assert.deepStrictEqual(
+        [napper?.status, napper?.runId, napper?.result],
+        ["interrupted", RunId.make(`run:${THREAD_ID}:1`), "(no output) after 2 req"],
+      );
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("ends an earlier turn's child that Stop is still cancelling once omp settles", () =>
+    Effect.gen(function* () {
+      const { stopCancel } = subagentFrames;
+      const fake = yield* makeFakeOmpProcess({
+        reply: (command) =>
+          command.type === "cancel_subagent"
+            ? FAKE_OMP_UNANSWERED
+            : subagentReply(command, [{ id: "Napper" }]),
+      });
+      const session = yield* openRuntime(fake);
+      yield* startTurn(session);
+      const first = yield* fake.takeCommand("prompt");
+      yield* emitAll(fake, [stopCancel.taskStart, stopCancel.napperStarted, stopCancel.taskEnd]);
+      yield* fake.emit({ ...frames.yieldedPromptResult, id: first.id });
+      yield* session.takeEvent(isTerminal);
+      yield* startTurn(session, { ordinal: 2 });
+      const second = yield* fake.takeCommand("prompt");
+      const secondTurn = yield* session.takeEvent(isProviderTurnUpdate);
+
+      const stop = yield* session.runtime
+        .interruptTurn({
+          providerThread: session.providerThread,
+          providerTurnId: secondTurn.providerTurn.id,
+        })
+        .pipe(Effect.forkChild({ startImmediately: true }));
+      const cancel = yield* fake.takeCommand("cancel_subagent");
+      // omp settles right after the abort, before the cancel has stopped the child (P2:154-157).
+      yield* emitAll(fake, [promptResult(second.id, { status: "aborted" }), frames.sessionSettled]);
+      yield* session.takeEvent(isBackgroundRelease);
+      const settled = lastSubagent(session.seen, "Napper");
+      yield* fake.respond(cancel, frames.cancelSubagentResult);
+      yield* Fiber.join(stop);
+
+      assert.strictEqual(settled?.status, "interrupted");
+      assert.isFalse(yield* session.runtime.hasPendingBackgroundWork!);
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("fails an earlier turn's running child when omp exits", () =>
+    Effect.gen(function* () {
+      const { stopCancel } = subagentFrames;
+      const fake = yield* makeFakeOmpProcess();
+      const session = yield* openRuntime(fake);
+      yield* startTurn(session);
+      const prompt = yield* fake.takeCommand("prompt");
+      yield* emitAll(fake, [stopCancel.taskStart, stopCancel.napperStarted, stopCancel.taskEnd]);
+      yield* fake.emit({ ...frames.yieldedPromptResult, id: prompt.id });
+      yield* session.takeEvent(isTerminal);
+
+      yield* fake.exit(1);
+      yield* Effect.flip(session.takeEvent(matchesNothing));
+
+      assert.strictEqual(lastSubagent(session.seen, "Napper")?.status, "failed");
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("holds a child a task call ran inline until omp settles, then reads its result", () =>
+    Effect.gen(function* () {
+      const { waited } = subagentFrames;
+      const { async: _job, ...inlineDetails } = waited.taskEnd.result.details;
+      // A `blocking` agent runs inline; its task call ends with no job (task/index.ts:1114-1122).
+      const inlineEnd = {
+        ...waited.taskEnd,
+        result: { ...waited.taskEnd.result, details: inlineDetails },
+      };
+      const fake = yield* makeFakeOmpProcess({
+        reply: (command) =>
+          command.type === "get_subagent_messages"
+            ? fakeOmpSuccess(waited.messagesReply)
+            : undefined,
+      });
+      const session = yield* openRuntime(fake);
+      yield* startTurn(session);
+      const prompt = yield* fake.takeCommand("prompt");
+      yield* emitAll(fake, [
+        waited.counterStarted,
+        waited.counterRunning,
+        waited.taskStart,
+        waited.counterCompleted,
+        inlineEnd,
+      ]);
+      yield* fake.emit(promptResult(prompt.id));
+      yield* session.takeEvent(isTerminal);
+      const pendingAtTurnEnd = backgroundWorkPending(session.seen);
+      yield* fake.emit(frames.sessionSettled);
+      yield* session.takeEvent(isBackgroundRelease);
+
+      assert.deepStrictEqual(pendingAtTurnEnd, [true]);
+      assert.strictEqual(lastToolRowStatus(session.seen, waited.taskStart.toolCallId), "completed");
+      assert.deepStrictEqual(
+        commandsOf(fake, "get_subagent_messages").map((command) => command.subagentId),
+        ["Counter"],
+      );
+      const counter = lastSubagent(session.seen, "Counter");
+      assert.deepStrictEqual([counter?.status, counter?.result], ["completed", "2"]);
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("keeps one row per child through a repeated start or end and clears its progress", () =>
+    Effect.gen(function* () {
+      const { parentAbort } = subagentFrames;
+      const endedAgain = {
+        ...parentAbort.quickCompleted,
+        payload: { ...parentAbort.quickCompleted.payload, status: "aborted" },
+      };
+      const fake = yield* makeFakeOmpProcess();
+      const session = yield* openRuntime(fake);
+      yield* startTurn(session);
+      const prompt = yield* fake.takeCommand("prompt");
+      yield* emitAll(fake, [
+        parentAbort.quickStarted,
+        parentAbort.quickRunning,
+        parentAbort.quickBash,
+        parentAbort.quickStarted,
+        parentAbort.quickCompleted,
+        endedAgain,
+        parentAbort.quickResultStart,
+        parentAbort.quickResultEnd,
+      ]);
+      yield* fake.emit(promptResult(prompt.id));
+      yield* session.takeEvent(isTerminal);
+
+      const quick = lastSubagent(session.seen, "Quick");
+      assert.deepStrictEqual(subagentNodeStatuses(session.seen), [
+        ["Quick", "running"],
+        ["Quick", "completed"],
+      ]);
+      assert.deepStrictEqual(
+        [quick?.status, quick?.progress, quick?.result, quick?.prompt],
+        ["completed", undefined, "quick-done", parentAbort.quickRunning.payload.assignment],
+      );
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("keeps a task call's row start time from when its first child was reported", () =>
+    Effect.gen(function* () {
+      const { parentAbort } = subagentFrames;
+      const taskCallId = parentAbort.taskStart.toolCallId;
+      const fake = yield* makeFakeOmpProcess();
+      const session = yield* openRuntime(fake);
+      yield* startTurn(session);
+      yield* fake.takeCommand("prompt");
+      yield* fake.emit(parentAbort.napperStarted);
+      yield* session.takeEvent(isSubagentUpdateOf("Napper"));
+      yield* TestClock.adjust(Duration.seconds(1));
+      yield* fake.emit(parentAbort.taskStart);
+      yield* session.takeEvent(
+        (event): event is AdapterEvent =>
+          event.type === "turn_item.updated" &&
+          nativeIdOf(event) === taskCallId &&
+          event.turnItem.type === "dynamic_tool" &&
+          event.turnItem.input !== undefined,
+      );
+
+      const taskRowStarts = session.seen.flatMap((event) =>
+        event.type === "turn_item.updated" && nativeIdOf(event) === taskCallId
+          ? [
+              event.turnItem.startedAt === null
+                ? null
+                : DateTime.toEpochMillis(event.turnItem.startedAt),
+            ]
+          : [],
+      );
+      assert.lengthOf(taskRowStarts, 2);
+      assert.notInclude(taskRowStarts, null);
+      assert.strictEqual(new Set(taskRowStarts).size, 1);
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("shows no row for a child's own child, whose task call omp never reports", () =>
+    Effect.gen(function* () {
+      const { nested } = subagentFrames;
+      const fake = yield* makeFakeOmpProcess();
+      const session = yield* openRuntime(fake);
+      yield* startTurn(session);
+      const prompt = yield* fake.takeCommand("prompt");
+      yield* emitAll(fake, [
+        nested.taskStart,
+        nested.outerStarted,
+        nested.outerRunning,
+        nested.taskEnd,
+        nested.waitStart,
+        nested.innerStarted,
+        nested.innerRunning,
+        nested.innerCompletedProgress,
+        nested.innerCompleted,
+        nested.outerCompletedProgress,
+        nested.outerCompleted,
+        nested.waitEnd,
+      ]);
+      yield* fake.emit(promptResult(prompt.id));
+      yield* session.takeEvent(isTerminal);
+      yield* fake.emit(frames.sessionSettled);
+      yield* session.takeEvent(isBackgroundRelease);
+
+      const innerTaskCall = nested.innerStarted.payload.parentToolCallId;
+      const shownChildren = session.seen.flatMap((event) =>
+        event.type === "subagent.updated" ? [event.subagent.nativeTaskRef?.nativeId] : [],
+      );
+      assert.deepStrictEqual([...new Set(shownChildren)], ["Outer"]);
+      assert.isFalse(session.seen.some((event) => nativeIdOf(event) === innerTaskCall));
+      assert.strictEqual(
+        lastSubagent(session.seen, "Outer")?.result,
+        "Inner reported the output: `inner-done`",
+      );
+      assert.deepStrictEqual(backgroundWorkPending(session.seen), [true, false]);
+      assert.lengthOf(commandsOf(fake, "get_subagent_messages"), 0);
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect(
+    "puts a child omp starts after its turn ended on the turn whose task call made it",
+    () =>
+      Effect.gen(function* () {
+        const { stopCancel } = subagentFrames;
+        const taskCallId = stopCancel.taskStart.toolCallId;
+        const fake = yield* makeFakeOmpProcess();
+        const session = yield* openRuntime(fake);
+        yield* startTurn(session);
+        const first = yield* fake.takeCommand("prompt");
+        yield* emitAll(fake, [stopCancel.taskStart, stopCancel.taskEnd]);
+        yield* fake.emit({ ...frames.yieldedPromptResult, id: first.id });
+        const firstTerminal = yield* session.takeEvent(isTerminal);
+
+        yield* startTurn(session, { ordinal: 2 });
+        const second = yield* fake.takeCommand("prompt");
+        // A batch past omp's concurrency limit starts its later children once others end.
+        yield* fake.emit(stopCancel.napperStarted);
+        yield* session.takeEvent(isSubagentUpdateOf("Napper"));
+        yield* fake.emit(promptResult(second.id));
+        yield* session.takeEvent(isTerminal);
+
+        const taskRowTurns = session.seen.flatMap((event) =>
+          event.type === "turn_item.updated" && nativeIdOf(event) === taskCallId
+            ? [event.turnItem.providerTurnId]
+            : [],
+        );
+        assert.deepStrictEqual(subagentRow(lastSubagent(session.seen, "Napper")), {
+          status: "running",
+          title: "Napper",
+          result: null,
+          origin: "provider_native",
+          childThreadId: null,
+          runId: RunId.make(`run:${THREAD_ID}:1`),
+          parentNodeId: nodeIdOf(session.seen, taskCallId),
+        });
+        assert.isTrue(taskRowTurns.every((turnId) => turnId === firstTerminal.providerTurnId));
+      }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect.each([
+    { ending: "settled completion", terminal: "completed", subagent: "running" },
+    { ending: "Stop", terminal: "interrupted", subagent: "interrupted" },
+    { ending: "provider error", terminal: "failed", subagent: "running" },
+    { ending: "process exit", terminal: "failed", subagent: "failed" },
+  ] as const)(
+    "leaves a running subagent to omp or settles it on $ending",
+    ({ ending, terminal: expectedStatus, subagent: expectedSubagent }) =>
+      Effect.gen(function* () {
+        const { parentAbort } = subagentFrames;
+        const fake = yield* makeFakeOmpProcess({
+          reply: (command) => subagentReply(command, [{ id: "Napper" }]),
+        });
+        const session = yield* openRuntime(fake);
+        yield* startTurn(session);
+        const prompt = yield* fake.takeCommand("prompt");
+        yield* emitAll(fake, [
+          parentAbort.napperStarted,
+          parentAbort.taskStart,
+          parentAbort.taskEnd,
+        ]);
+        yield* session.takeEvent(isSubagentUpdateOf("Napper"));
+
+        if (ending === "settled completion") {
+          yield* fake.emit({ ...frames.yieldedPromptResult, id: prompt.id });
+        }
+        if (ending === "provider error") {
+          yield* fake.emit({ ...frames.providerErrorResult, id: prompt.id });
+        }
+        if (ending === "process exit") yield* fake.exit(1);
+        if (ending === "Stop") {
+          yield* session.runtime.interruptTurn({
+            providerThread: session.providerThread,
+            providerTurnId: firstProviderTurnId(session.seen),
+          });
+          yield* fake.emit(promptResult(prompt.id, { status: "aborted" }));
+        }
+        const terminal = yield* session.takeEvent(isTerminal);
+
+        assert.strictEqual(terminal.status, expectedStatus);
+        assert.strictEqual(lastSubagent(session.seen, "Napper")?.status, expectedSubagent);
+        assert.strictEqual(
+          terminal.status === "failed" ? terminal.childTurnsContinue : undefined,
+          ending === "provider error" ? true : undefined,
+        );
+      }).pipe(Effect.scoped, Effect.provide(layerTest)),
   );
 
   it.effect.each([
@@ -2163,9 +2980,15 @@ describe("OmpAdapterV2", () => {
         assert.deepStrictEqual(
           restarted
             .commands()
-            .slice(1, 5)
+            .slice(1, 6)
             .map((command) => command.type),
-          ["set_event_filter", "set_ask_dialog", "set_interrupt_mode", "set_host_tools"],
+          [
+            "set_event_filter",
+            "set_subagent_subscription",
+            "set_ask_dialog",
+            "set_interrupt_mode",
+            "set_host_tools",
+          ],
         );
         assert.lengthOf(commandsOf(restarted, "get_branch_messages"), 2);
         assert.strictEqual(terminal.status, "completed");
@@ -2201,6 +3024,447 @@ describe("OmpAdapterV2", () => {
       assert.isUndefined(lastToolRowStatus(session.seen, frames.bashStart.toolCallId));
       assert.isTrue(Option.isNone(yield* wake.dispatchIfCurrent!(Effect.void)));
       assert.isFalse(yield* session.runtime.hasPendingBackgroundWork!);
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+});
+
+type GoalCommandFrame = Extract<OmpCommandFrame, { readonly type: "goal" }>;
+
+/** omp's reply to each `goal` op, with the frames omp writes before it. */
+const goalReplies =
+  (replies: Partial<Record<GoalCommandFrame["op"], FakeOmpReply>>) =>
+  (command: OmpCommandFrame): FakeOmpReply | undefined =>
+    command.type === "goal" ? replies[command.op] : undefined;
+
+const isGoalUpdate = (
+  event: AdapterEvent,
+): event is Extract<AdapterEvent, { readonly type: "provider_thread.updated" }> =>
+  event.type === "provider_thread.updated" && (event.providerThread.goal ?? null) !== null;
+
+/** The goal the thread showed after each change: [status, tokens used, seconds used] or null. */
+const shownGoals = (seen: ReadonlyArray<AdapterEvent>) => {
+  const shown: Array<string> = [];
+  for (const event of seen) {
+    if (event.type !== "provider_thread.updated") continue;
+    const goal = event.providerThread.goal ?? null;
+    const entry = JSON.stringify(
+      goal === null ? null : [goal.status, goal.tokensUsed, goal.timeUsedSeconds],
+    );
+    if (shown.at(-1) !== entry) shown.push(entry);
+  }
+  return shown.map((entry): unknown => JSON.parse(entry));
+};
+
+const goalOps = (fake: FakeOmpProcess) =>
+  commandsOf(fake, "goal").map((command) => [command.op, command.objective]);
+
+/** The replies control turns showed, as [message, level]. */
+const goalNotices = (seen: ReadonlyArray<AdapterEvent>) =>
+  seen.flatMap((event) =>
+    event.type === "turn_item.updated" &&
+    event.turnItem.type === "system_notice" &&
+    nativeIdOf(event)?.startsWith("goal-reply:") === true
+      ? [[event.turnItem.message, event.turnItem.level]]
+      : [],
+  );
+
+describe("OmpAdapterV2 goals", () => {
+  const { budgetLimited, lifecycle, complete, abortPauses } = goalFrames;
+  const objective = budgetLimited.createResult.goal.objective;
+
+  it.effect(
+    "sets a goal, adopts the run omp starts for it and shows the goal run out of budget",
+    () =>
+      Effect.gen(function* () {
+        const wakes =
+          yield* Queue.unbounded<ProviderContinuationRequests.ProviderContinuationRequest>();
+        const fake = yield* makeFakeOmpProcess({
+          reply: goalReplies({
+            create: fakeOmpSuccess(budgetLimited.createResult, {
+              before: [budgetLimited.createUpdated],
+            }),
+            drop: fakeOmpSuccess(budgetLimited.dropResult, { before: budgetLimited.dropUpdates }),
+          }),
+        });
+        const session = yield* openRuntime(fake, {
+          continuationRequests: {
+            offer: (request) => Queue.offer(wakes, request).pipe(Effect.asVoid),
+          },
+        });
+        const [agentStart, ...run] = budgetLimited.run;
+
+        yield* startTurn(session, { text: `/goal ${objective}` });
+        const control = yield* session.takeEvent(isTerminal);
+        // omp starts working on the goal right after its reply (P2/goal-budget-limited.jsonl:12).
+        yield* fake.emit(agentStart!);
+        yield* Queue.take(wakes);
+        yield* startTurn(session, { ordinal: 2, continuation: true });
+        yield* emitAll(fake, run);
+        const goalRun = yield* session.takeEvent(isTerminal);
+        yield* startTurn(session, { ordinal: 3, text: "/goal clear" });
+        yield* session.takeEvent(isTerminal);
+
+        assert.deepStrictEqual([control.status, goalRun.status], ["completed", "completed"]);
+        assert.deepStrictEqual(goalOps(fake), [
+          ["create", objective],
+          ["drop", undefined],
+        ]);
+        assert.lengthOf(commandsOf(fake, "prompt"), 0);
+        assert.deepStrictEqual(shownGoals(session.seen), [
+          null,
+          ["active", 0, 0],
+          ["budget_limited", 13_959, 1],
+          ["budget_limited", 14_452, 2],
+          ["budget_limited", 14_452, 4],
+          null,
+        ]);
+        assert.deepStrictEqual(assistantTexts(session.seen, control.providerTurnId), []);
+        assert.deepStrictEqual(assistantTexts(session.seen, goalRun.providerTurnId), [
+          "I'll create the first file this turn.",
+          "Progress: `one.txt` created with `ok` (2 bytes, confirmed by write tool).\n\nRemaining work: `two.txt`, `three.txt`, `four.txt`, `five.txt`, each containing `ok`, one per turn. The goal is not complete, so I have not marked it so. Next step: resume the goal to create `two.txt`.",
+        ]);
+        // omp's goal context, continuation and budget messages are hidden (`display: false`).
+        const items = JSON.stringify(
+          session.seen.filter((event) => event.type === "turn_item.updated"),
+        );
+        for (const hidden of [
+          "<goal_context>",
+          "Hidden continuation steer",
+          "Active goal token budget reached",
+        ]) {
+          assert.notInclude(items, hidden);
+        }
+        assert.deepStrictEqual(goalNotices(session.seen), []);
+        assert.isTrue(session.runtime.providerSession.capabilities.turns.supportsNativeGoals);
+      }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("keeps a /goal control turn that took over a started run open until omp settles", () =>
+    Effect.gen(function* () {
+      const wakes =
+        yield* Queue.unbounded<ProviderContinuationRequests.ProviderContinuationRequest>();
+      const fake = yield* makeFakeOmpProcess({
+        reply: goalReplies({
+          create: fakeOmpSuccess(budgetLimited.createResult, {
+            before: [budgetLimited.createUpdated],
+          }),
+          get: FAKE_OMP_UNANSWERED,
+        }),
+      });
+      const session = yield* openRuntime(fake, {
+        continuationRequests: {
+          offer: (request) => Queue.offer(wakes, request).pipe(Effect.asVoid),
+        },
+      });
+      const [agentStart, ...run] = budgetLimited.run;
+
+      yield* startTurn(session, { text: `/goal ${objective}` });
+      yield* fake.takeCommand("goal");
+      yield* session.takeEvent(isTerminal);
+      // omp starts the goal's run right after its reply (P2/goal-budget-limited.jsonl:12).
+      yield* fake.emit(agentStart!);
+      const wake = yield* Queue.take(wakes);
+      // A second /goal queued behind the first starts before the run's own turn.
+      yield* startTurn(session, { ordinal: 2, text: "/goal" });
+      yield* fake.respond(yield* fake.takeCommand("goal"), budgetLimited.getResult);
+      yield* emitAll(fake, run);
+      const check = yield* session.takeEvent(isTerminal);
+
+      assert.strictEqual(check.status, "completed");
+      assert.isTrue(Option.isNone(yield* wake.dispatchIfCurrent!(Effect.void)));
+      assert.deepStrictEqual(goalNotices(session.seen), [
+        [`Goal budget limited: ${objective}`, "info"],
+      ]);
+      const toolStart = run.find((frame) => frame.type === "tool_execution_start");
+      assert.lengthOf(assistantTexts(session.seen, check.providerTurnId), 2);
+      assert.strictEqual(lastToolRowStatus(session.seen, toolStart!.toolCallId!), "completed");
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect.each([
+    {
+      name: "shows the goal",
+      text: "/goal",
+      op: "get",
+      reply: fakeOmpSuccess(budgetLimited.getResult),
+      notice: [`Goal budget limited: ${objective}`, "info"],
+    },
+    {
+      name: "says no goal is set when pausing none",
+      text: "/goal pause",
+      op: "pause",
+      reply: fakeOmpSuccess(lifecycle.noGoalResult),
+      notice: ["No goal is set.", "info"],
+    },
+    {
+      name: "explains why a goal out of budget does not resume",
+      text: "/goal resume",
+      op: "resume",
+      reply: fakeOmpSuccess(budgetLimited.getResult),
+      notice: [
+        "This goal has used its token budget, so OMP cannot resume it. Clear it and set it again to keep working.",
+        "info",
+      ],
+    },
+    {
+      name: "shows why omp refused a new goal",
+      text: "/goal Ship it",
+      op: "create",
+      reply: fakeOmpFailure(lifecycle.createRefusedError),
+      notice: [lifecycle.createRefusedError, "warning"],
+    },
+    {
+      name: "pauses with no reply",
+      text: "/goal pause",
+      op: "pause",
+      reply: fakeOmpSuccess(lifecycle.pauseResult, { before: lifecycle.pauseUpdates }),
+      notice: undefined,
+    },
+  ] as const)("completes a /goal control turn that $name", ({ text, op, reply, notice }) =>
+    Effect.gen(function* () {
+      const fake = yield* makeFakeOmpProcess({ reply: goalReplies({ [op]: reply }) });
+      const session = yield* openRuntime(fake);
+
+      yield* startTurn(session, { text });
+      const terminal = yield* session.takeEvent(isTerminal);
+
+      assert.strictEqual(terminal.status, "completed");
+      assert.deepStrictEqual(
+        goalOps(fake).map(([sent]) => sent),
+        [op],
+      );
+      assert.lengthOf(commandsOf(fake, "prompt"), 0);
+      assert.deepStrictEqual<unknown>(
+        goalNotices(session.seen),
+        notice === undefined ? [] : [notice],
+      );
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("keeps a completed goal omp forgot until the next goal command replaces it", () =>
+    Effect.gen(function* () {
+      const fake = yield* makeFakeOmpProcess({
+        reply: goalReplies({
+          get: fakeOmpSuccess(complete.getResult),
+          drop: fakeOmpSuccess(lifecycle.noGoalResult),
+          create: fakeOmpSuccess(budgetLimited.createResult, {
+            before: [budgetLimited.createUpdated],
+          }),
+        }),
+      });
+      const session = yield* openRuntime(fake);
+      const done = complete.completeUpdated.goal.objective;
+
+      yield* fake.emit(complete.completeUpdated);
+      yield* session.takeEvent(isGoalUpdate);
+      yield* startTurn(session, { text: "/goal" });
+      yield* session.takeEvent(isTerminal);
+      yield* startTurn(session, { ordinal: 2, text: `/goal ${objective}` });
+      yield* session.takeEvent(isTerminal);
+
+      assert.deepStrictEqual(goalNotices(session.seen), [[`Goal complete: ${done}`, "info"]]);
+      assert.deepStrictEqual(goalOps(fake), [
+        ["get", undefined],
+        ["drop", undefined],
+        ["create", objective],
+      ]);
+      assert.deepStrictEqual(shownGoals(session.seen), [
+        null,
+        ["complete", 1_430, 5],
+        ["active", 0, 0],
+      ]);
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("shows the goal omp restored when it opens a thread, and keeps a completed one", () =>
+    Effect.gen(function* () {
+      let goalState: unknown = lifecycle.pausedStateGoal;
+      const fake = yield* makeFakeOmpProcess({
+        reply: (command) =>
+          command.type === "get_state" ? fakeOmpSuccess(stateWith({ goal: goalState })) : undefined,
+      });
+      const session = yield* openRuntime(fake);
+      const completed = {
+        objective: complete.completeUpdated.goal.objective,
+        status: "complete",
+        tokensUsed: 1_430,
+        tokenBudget: 60_000,
+        timeUsedSeconds: 5,
+      } as const;
+
+      goalState = null;
+      const resumed = yield* session.runtime.resumeThread({
+        providerThread: { ...session.providerThread, goal: completed },
+      });
+      const cleared = yield* session.runtime.resumeThread({
+        providerThread: { ...session.providerThread },
+      });
+
+      assert.deepStrictEqual(session.providerThread.goal, {
+        objective: "Create a file named goal.txt containing the word ok.",
+        status: "paused",
+        tokensUsed: 0,
+        tokenBudget: 60_000,
+        timeUsedSeconds: 4,
+      });
+      assert.deepStrictEqual(resumed.goal, completed);
+      assert.isNull(cleared.goal);
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("shows no goal on a new native session that replaced one with a completed goal", () =>
+    Effect.gen(function* () {
+      const fake = yield* makeFakeOmpProcess();
+      const session = yield* openRuntime(fake);
+      const completed = {
+        objective: complete.completeUpdated.goal.objective,
+        status: "complete",
+        tokensUsed: 1_430,
+        tokenBudget: 60_000,
+        timeUsedSeconds: 5,
+      } as const;
+
+      const fresh = yield* session.runtime.ensureThread({
+        threadId: THREAD_ID,
+        modelSelection: modelSelection("default"),
+        runtimePolicy: session.policy,
+        existingProviderThread: { ...session.providerThread, goal: completed },
+        forceNewNativeThread: true,
+      });
+
+      assert.lengthOf(commandsOf(fake, "new_session"), 1);
+      assert.isNull(fresh.goal);
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("shows the goal paused once a tightening restart reopens the session", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const workspace = yield* fileSystem.makeTempDirectoryScoped({ prefix: "omp-adapter-goal-" });
+      const cwd = yield* fileSystem.realPath(workspace);
+      const sessionFile = yield* writeSessionFile(path.join(cwd, "session.jsonl"), cwd);
+      let goalState: unknown = lifecycle.resumeUpdated.state;
+      const fake = yield* makeFakeOmpProcess({
+        reply: (command) =>
+          command.type === "get_state"
+            ? fakeOmpSuccess(stateWith({ sessionFile, goal: goalState }))
+            : undefined,
+      });
+      const session = yield* openRuntime(fake, { cwd });
+
+      // omp pauses an active goal it restores when a process opens it (rpc-goal.ts:337-368).
+      goalState = lifecycle.pausedStateGoal;
+      yield* runTurn(session, fake, { runtimeMode: "approval-required" });
+
+      assert.lengthOf(fake.spawns(), 2);
+      assert.deepStrictEqual(shownGoals(session.seen), [
+        ["active", 0, 4],
+        ["paused", 0, 4],
+      ]);
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("shows the goal omp keeps after a rollback rewinds the thread", () =>
+    Effect.gen(function* () {
+      const branched = "/fake/omp-sessions/--workspace--/branched.jsonl";
+      let branch: ReadonlyArray<{ entryId: string; text: string }> = [];
+      let state = stateWith({ goal: lifecycle.pausedStateGoal });
+      const fake = yield* makeFakeOmpProcess({
+        reply: (command) => {
+          if (command.type === "get_branch_messages") return fakeOmpSuccess({ messages: branch });
+          if (command.type === "get_state") return fakeOmpSuccess(state);
+          if (command.type !== "branch") return undefined;
+          // omp keeps only a goal the kept entries journaled, with no frame (rpc-goal.ts:337-347).
+          state = stateWith({ sessionFile: branched, goal: null });
+          return fakeOmpSuccess({ text: "Hello omp", cancelled: false });
+        },
+      });
+      const session = yield* openRuntime(fake);
+      yield* startTurn(session);
+      const prompt = yield* fake.takeCommand("prompt");
+      branch = [{ entryId: FIRST_USER_ENTRY, text: "Hello omp" }];
+      yield* fake.emit(promptResult(prompt.id));
+      yield* session.takeEvent(isTerminal);
+      const turns = [
+        providerTurn(session.providerThread, 1, strongRef(FIRST_USER_ENTRY)),
+        providerTurn(session.providerThread, 2, strongRef(SECOND_USER_ENTRY)),
+      ];
+
+      const snapshot = yield* session.runtime.rollbackThread({
+        providerThread: session.providerThread,
+        target: {
+          type: "provider_turn",
+          checkpointId: CheckpointId.make("cp-1"),
+          appRunOrdinal: 1,
+          providerTurn: turns[0]!,
+        },
+        providerThreadTurns: turns,
+      });
+
+      const rebound = yield* session.takeEvent(
+        (event): event is Extract<AdapterEvent, { readonly type: "provider_thread.updated" }> =>
+          event.type === "provider_thread.updated" &&
+          event.providerThread.nativeThreadRef?.nativeId === branched,
+      );
+
+      assert.strictEqual(session.providerThread.goal?.status, "paused");
+      assert.isNull(snapshot.providerThread.goal);
+      assert.isNull(rebound.providerThread.goal);
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("publishes the goal only when omp reports a change", () =>
+    Effect.gen(function* () {
+      const fake = yield* makeFakeOmpProcess();
+      const session = yield* openRuntime(fake);
+      const budgetUpdate = budgetLimited.run.find((frame) => frame.type === "goal_updated");
+
+      yield* emitAll(fake, [budgetLimited.createUpdated, budgetLimited.createUpdated]);
+      yield* fake.emit(budgetUpdate!);
+      const first = yield* session.takeEvent(isGoalUpdate);
+      const second = yield* session.takeEvent(isGoalUpdate);
+
+      assert.deepStrictEqual(
+        [first.providerThread.goal?.status, second.providerThread.goal?.status],
+        ["active", "budget_limited"],
+      );
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect.each([
+    { name: "pauses an active goal", goal: [abortPauses.activeUpdated], pauses: [["pause"]] },
+    { name: "sends no goal command without a goal", goal: [], pauses: [] },
+  ])("Stop $name", ({ goal, pauses }) =>
+    Effect.gen(function* () {
+      const fake = yield* makeFakeOmpProcess();
+      const session = yield* openRuntime(fake);
+      for (const frame of goal) {
+        yield* fake.emit(frame);
+        yield* session.takeEvent(isGoalUpdate);
+      }
+
+      yield* startTurn(session);
+      const prompt = yield* fake.takeCommand("prompt");
+      const started = yield* session.takeEvent(isProviderTurnUpdate);
+      yield* session.runtime.interruptTurn({
+        providerThread: session.providerThread,
+        providerTurnId: started.providerTurn.id,
+      });
+      // omp pauses the goal itself when the abort ends a run (STG/10:41).
+      if (goal.length > 0) yield* fake.emit(abortPauses.pausedUpdated);
+      yield* fake.emit(promptResult(prompt.id, { status: "aborted" }));
+      const terminal = yield* session.takeEvent(isTerminal);
+
+      assert.strictEqual(terminal.status, "interrupted");
+      assert.deepStrictEqual(
+        goalOps(fake).map(([op]) => [op]),
+        pauses,
+      );
+      assert.deepStrictEqual(
+        shownGoals(session.seen).at(-1),
+        goal.length > 0 ? ["paused", 1_245, 2] : null,
+      );
     }).pipe(Effect.scoped, Effect.provide(layerTest)),
   );
 });

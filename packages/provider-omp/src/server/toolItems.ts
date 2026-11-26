@@ -45,10 +45,10 @@ export type OmpToolItemBody = OmpCommandExecutionBody | OmpFileChangeBody | OmpD
 
 /**
  * `tool_command`: a bash call whose first token is a mounted tool command (ast_edit, mcp__…,
- * discoverable host tools); it renders as dynamic_tool. `ask` renders as the form dialog.
- * A row keeps the kind it was classified with at start.
+ * discoverable host tools); it renders as dynamic_tool. `ask` renders as the form dialog and
+ * `todo` as the turn's todo list. A row keeps the kind it was classified with at start.
  */
-export type OmpToolKind = "command" | "tool_command" | "file_change" | "ask" | "dynamic";
+export type OmpToolKind = "command" | "tool_command" | "file_change" | "ask" | "todo" | "dynamic";
 
 /**
  * Built-in tools omp mounts as bash commands: upstream tools declaring `loadMode = "discoverable"`
@@ -93,6 +93,7 @@ const KIND_BY_TOOL_NAME: ReadonlyMap<string, OmpToolKind> = new Map([
   ["edit", "file_change"],
   ["write", "file_change"],
   ["ask", "ask"],
+  ["todo", "todo"],
 ]);
 
 const FILE_CHANGE_OPERATIONS: ReadonlyMap<string, string> = new Map([
@@ -399,6 +400,7 @@ const BODY_BUILDERS: Readonly<Record<OmpToolKind, (input: OmpToolBodyInput) => O
   tool_command: toolCommandBody,
   file_change: fileChangeBody,
   ask: dynamicBody,
+  todo: dynamicBody,
   dynamic: dynamicBody,
 };
 

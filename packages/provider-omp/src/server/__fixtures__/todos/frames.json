@@ -1,0 +1,445 @@
+{
+  "//": "omp 19.1.1 todo frames with Haiku 5.5. createCompleteDrop: phase2/todos-create3-complete2-drop1.jsonl:33,34,52,53,70,71,88,89. twoPhases: phase2b/todos-two-phases-view-error.jsonl:32,33,44,45,57,58,70,71,82,85 (82 is omp's todo_reminder; 85 is the extra model loop it starts inside the same prompt).",
+  "createCompleteDrop": {
+    "initStart": {
+      "type": "tool_execution_start",
+      "toolCallId": "toolu_01YRHhB8CEFKTBdBV37eEmZR",
+      "toolName": "todo",
+      "args": {
+        "op": "init",
+        "list": [
+          {
+            "phase": "Probe",
+            "items": ["Alpha", "Beta", "Gamma"]
+          }
+        ]
+      }
+    },
+    "initEnd": {
+      "type": "tool_execution_end",
+      "toolCallId": "toolu_01YRHhB8CEFKTBdBV37eEmZR",
+      "toolName": "todo",
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Remaining items (3):\n  - Alpha [in_progress] (Probe)\n  - Beta [pending] (Probe)\n  - Gamma [pending] (Probe)\nOverall: 0/3 done, 3 open.\nActive phase 1/1 \"Probe\" (0/3).\n  Probe:\n    - [ ] Alpha (in progress)\n    - [ ] Beta\n    - [ ] Gamma"
+          }
+        ],
+        "details": {
+          "op": "init",
+          "phases": [
+            {
+              "name": "Probe",
+              "tasks": [
+                {
+                  "content": "Alpha",
+                  "status": "in_progress"
+                },
+                {
+                  "content": "Beta",
+                  "status": "pending"
+                },
+                {
+                  "content": "Gamma",
+                  "status": "pending"
+                }
+              ]
+            }
+          ],
+          "storage": "session"
+        }
+      },
+      "isError": false
+    },
+    "doneAlphaStart": {
+      "type": "tool_execution_start",
+      "toolCallId": "toolu_017fE8q8kXSvEXHUg9GxVNNd",
+      "toolName": "todo",
+      "args": {
+        "op": "done",
+        "task": "Alpha"
+      }
+    },
+    "doneAlphaEnd": {
+      "type": "tool_execution_end",
+      "toolCallId": "toolu_017fE8q8kXSvEXHUg9GxVNNd",
+      "toolName": "todo",
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Remaining items (2):\n  - Beta [in_progress] (Probe)\n  - Gamma [pending] (Probe)\nOverall: 1/3 done, 2 open.\nActive phase 1/1 \"Probe\" (1/3).\n  Probe:\n    - [X] Alpha\n    - [ ] Beta (in progress)\n    - [ ] Gamma"
+          }
+        ],
+        "details": {
+          "op": "done",
+          "phases": [
+            {
+              "name": "Probe",
+              "tasks": [
+                {
+                  "content": "Alpha",
+                  "status": "completed"
+                },
+                {
+                  "content": "Beta",
+                  "status": "in_progress"
+                },
+                {
+                  "content": "Gamma",
+                  "status": "pending"
+                }
+              ]
+            }
+          ],
+          "storage": "session",
+          "completedTasks": [
+            {
+              "phase": "Probe",
+              "content": "Alpha"
+            }
+          ]
+        }
+      },
+      "isError": false
+    },
+    "doneBetaStart": {
+      "type": "tool_execution_start",
+      "toolCallId": "toolu_01WZZupHPMgoL31PW9qYR3up",
+      "toolName": "todo",
+      "args": {
+        "op": "done",
+        "task": "Beta"
+      }
+    },
+    "doneBetaEnd": {
+      "type": "tool_execution_end",
+      "toolCallId": "toolu_01WZZupHPMgoL31PW9qYR3up",
+      "toolName": "todo",
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Remaining items (1):\n  - Gamma [in_progress] (Probe)\nOverall: 2/3 done, 1 open.\nActive phase 1/1 \"Probe\" (2/3).\n  Probe:\n    - [X] Alpha\n    - [X] Beta\n    - [ ] Gamma (in progress)"
+          }
+        ],
+        "details": {
+          "op": "done",
+          "phases": [
+            {
+              "name": "Probe",
+              "tasks": [
+                {
+                  "content": "Alpha",
+                  "status": "completed"
+                },
+                {
+                  "content": "Beta",
+                  "status": "completed"
+                },
+                {
+                  "content": "Gamma",
+                  "status": "in_progress"
+                }
+              ]
+            }
+          ],
+          "storage": "session",
+          "completedTasks": [
+            {
+              "phase": "Probe",
+              "content": "Beta"
+            }
+          ]
+        }
+      },
+      "isError": false
+    },
+    "dropGammaStart": {
+      "type": "tool_execution_start",
+      "toolCallId": "toolu_01CvYWgCvCVTzqA9DwYJzP4x",
+      "toolName": "todo",
+      "args": {
+        "op": "drop",
+        "task": "Gamma"
+      }
+    },
+    "dropGammaEnd": {
+      "type": "tool_execution_end",
+      "toolCallId": "toolu_01CvYWgCvCVTzqA9DwYJzP4x",
+      "toolName": "todo",
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Remaining items: none.\nOverall: 3/3 done, 0 open.\nActive phase 1/1 \"Probe\" (3/3).\n  Probe:\n    - [X] Alpha\n    - [X] Beta\n    - [ ] Gamma (dropped)"
+          }
+        ],
+        "details": {
+          "op": "drop",
+          "phases": [
+            {
+              "name": "Probe",
+              "tasks": [
+                {
+                  "content": "Alpha",
+                  "status": "completed"
+                },
+                {
+                  "content": "Beta",
+                  "status": "completed"
+                },
+                {
+                  "content": "Gamma",
+                  "status": "abandoned"
+                }
+              ]
+            }
+          ],
+          "storage": "session"
+        }
+      },
+      "isError": false
+    }
+  },
+  "twoPhases": {
+    "initStart": {
+      "type": "tool_execution_start",
+      "toolCallId": "toolu_0134vpqKvdfX6xqAAsnX5aCB",
+      "toolName": "todo",
+      "args": {
+        "op": "init",
+        "list": [
+          {
+            "phase": "Build",
+            "items": ["One", "Two"]
+          },
+          {
+            "phase": "Ship",
+            "items": ["Three"]
+          }
+        ]
+      }
+    },
+    "initEnd": {
+      "type": "tool_execution_end",
+      "toolCallId": "toolu_0134vpqKvdfX6xqAAsnX5aCB",
+      "toolName": "todo",
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Remaining items (3):\n  - One [in_progress] (Build)\n  - Two [pending] (Build)\n  - Three [pending] (Ship)\nOverall: 0/3 done, 3 open.\nActive phase 1/2 \"Build\" (0/2).\n  Build:\n    - [ ] One (in progress)\n    - [ ] Two\n  Ship:\n    - [ ] Three"
+          }
+        ],
+        "details": {
+          "op": "init",
+          "phases": [
+            {
+              "name": "Build",
+              "tasks": [
+                {
+                  "content": "One",
+                  "status": "in_progress"
+                },
+                {
+                  "content": "Two",
+                  "status": "pending"
+                }
+              ]
+            },
+            {
+              "name": "Ship",
+              "tasks": [
+                {
+                  "content": "Three",
+                  "status": "pending"
+                }
+              ]
+            }
+          ],
+          "storage": "session"
+        }
+      },
+      "isError": false
+    },
+    "viewStart": {
+      "type": "tool_execution_start",
+      "toolCallId": "toolu_014X4eufnaakHX5ngHuwydV8",
+      "toolName": "todo",
+      "args": {
+        "op": "view"
+      }
+    },
+    "viewEnd": {
+      "type": "tool_execution_end",
+      "toolCallId": "toolu_014X4eufnaakHX5ngHuwydV8",
+      "toolName": "todo",
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Remaining items (3):\n  - One [in_progress] (Build)\n  - Two [pending] (Build)\n  - Three [pending] (Ship)\nOverall: 0/3 done, 3 open.\nActive phase 1/2 \"Build\" (0/2).\n  Build:\n    - [ ] One (in progress)\n    - [ ] Two\n  Ship:\n    - [ ] Three"
+          }
+        ],
+        "details": {
+          "op": "view",
+          "phases": [
+            {
+              "name": "Build",
+              "tasks": [
+                {
+                  "content": "One",
+                  "status": "in_progress"
+                },
+                {
+                  "content": "Two",
+                  "status": "pending"
+                }
+              ]
+            },
+            {
+              "name": "Ship",
+              "tasks": [
+                {
+                  "content": "Three",
+                  "status": "pending"
+                }
+              ]
+            }
+          ],
+          "storage": "session"
+        }
+      },
+      "isError": false
+    },
+    "missingTaskStart": {
+      "type": "tool_execution_start",
+      "toolCallId": "toolu_019Bgijya2MddwggnzXmK1wE",
+      "toolName": "todo",
+      "args": {
+        "op": "done",
+        "task": "Missing"
+      }
+    },
+    "missingTaskEnd": {
+      "type": "tool_execution_end",
+      "toolCallId": "toolu_019Bgijya2MddwggnzXmK1wE",
+      "toolName": "todo",
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Errors: Task \"Missing\" not found\nRemaining items (3):\n  - One [in_progress] (Build)\n  - Two [pending] (Build)\n  - Three [pending] (Ship)\nOverall: 0/3 done, 3 open.\nActive phase 1/2 \"Build\" (0/2).\n  Build:\n    - [ ] One (in progress)\n    - [ ] Two\n  Ship:\n    - [ ] Three"
+          }
+        ],
+        "details": {
+          "op": "done",
+          "phases": [
+            {
+              "name": "Build",
+              "tasks": [
+                {
+                  "content": "One",
+                  "status": "in_progress"
+                },
+                {
+                  "content": "Two",
+                  "status": "pending"
+                }
+              ]
+            },
+            {
+              "name": "Ship",
+              "tasks": [
+                {
+                  "content": "Three",
+                  "status": "pending"
+                }
+              ]
+            }
+          ],
+          "storage": "session"
+        },
+        "isError": true
+      },
+      "isError": true
+    },
+    "doneOneStart": {
+      "type": "tool_execution_start",
+      "toolCallId": "toolu_01W1dZwgtkbE7QquiVnuc68v",
+      "toolName": "todo",
+      "args": {
+        "op": "done",
+        "task": "One"
+      }
+    },
+    "doneOneEnd": {
+      "type": "tool_execution_end",
+      "toolCallId": "toolu_01W1dZwgtkbE7QquiVnuc68v",
+      "toolName": "todo",
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Remaining items (2):\n  - Two [in_progress] (Build)\n  - Three [pending] (Ship)\nOverall: 1/3 done, 2 open.\nActive phase 1/2 \"Build\" (1/2).\n  Build:\n    - [X] One\n    - [ ] Two (in progress)\n  Ship:\n    - [ ] Three"
+          }
+        ],
+        "details": {
+          "op": "done",
+          "phases": [
+            {
+              "name": "Build",
+              "tasks": [
+                {
+                  "content": "One",
+                  "status": "completed"
+                },
+                {
+                  "content": "Two",
+                  "status": "in_progress"
+                }
+              ]
+            },
+            {
+              "name": "Ship",
+              "tasks": [
+                {
+                  "content": "Three",
+                  "status": "pending"
+                }
+              ]
+            }
+          ],
+          "storage": "session",
+          "completedTasks": [
+            {
+              "phase": "Build",
+              "content": "One"
+            }
+          ]
+        }
+      },
+      "isError": false
+    },
+    "reminder": {
+      "type": "todo_reminder",
+      "todos": [
+        {
+          "content": "Two",
+          "status": "in_progress"
+        },
+        {
+          "content": "Three",
+          "status": "pending"
+        }
+      ],
+      "attempt": 1,
+      "maxAttempts": 3
+    },
+    "reminderAgentStart": {
+      "type": "agent_start"
+    }
+  }
+}

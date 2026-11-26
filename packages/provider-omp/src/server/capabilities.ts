@@ -1,7 +1,4 @@
-/**
- * Capabilities the OMP adapter declares (Phase 1). Every `true` here is a promise the adapter
- * keeps; Phase 2 features (subagents, todos, goals) stay off until their frames are wired.
- */
+/** Capabilities the OMP adapter declares. Every `true` here is a promise the adapter keeps. */
 import type { OrchestrationV2ProviderCapabilities } from "@t3tools/contracts";
 
 export const OmpProviderCapabilitiesV2 = {
@@ -27,7 +24,8 @@ export const OmpProviderCapabilitiesV2 = {
     exposesNativeThreadId: true,
   },
   turns: {
-    supportsNativeGoals: false,
+    // `/goal` maps to omp's `goal` command; omp works on an active goal in runs of its own.
+    supportsNativeGoals: true,
     exposesNativeTurnId: false,
     emitsTurnStarted: true,
     emitsTurnCompleted: true,
@@ -67,16 +65,18 @@ export const OmpProviderCapabilitiesV2 = {
     approvalsCanOriginateFromSubagents: false,
   },
   planning: {
-    emitsPlanUpdated: false,
-    emitsTodoList: false,
+    emitsPlanUpdated: true,
+    emitsTodoList: true,
     emitsProposedPlan: false,
     supportsStructuredQuestions: true,
     planDeltasHaveItemIds: false,
   },
+  // Children are rows without threads of their own. Stop ends them all; core routes a
+  // single-child Stop to Claude only.
   subagents: {
-    supportsSubagents: false,
+    supportsSubagents: true,
     exposesSubagentThreadIds: false,
-    emitsSubagentLifecycle: false,
+    emitsSubagentLifecycle: true,
     canWaitForSubagents: false,
     canCloseSubagents: false,
     canForkSubagentThread: false,
