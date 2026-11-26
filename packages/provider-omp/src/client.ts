@@ -18,7 +18,6 @@ const accent = { light: "#F97316", dark: "#F97316" };
 export const ompClient = defineProviderClient({
   driverKind: ProviderDriverKind.make("omp"),
   label: "OMP",
-  featured: false,
   settingsSchema: OmpSettings,
   icon: {
     viewBox: "8 -7 104 104",
