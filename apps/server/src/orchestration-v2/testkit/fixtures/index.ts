@@ -95,6 +95,7 @@ import { assertOmpSupervisedWriteOutput } from "./omp_supervised_write/output.ts
 import { ompThreadRollbackInput } from "./omp_thread_rollback/input.ts";
 import { assertOmpThreadRollbackOutput } from "./omp_thread_rollback/output.ts";
 import { assertMuseSubagentV2Output } from "./subagent_v2/muse_output.ts";
+import { assertOmpSubagentV2Output } from "./subagent_v2/omp_output.ts";
 import { assertMuseMultiTurnOutput } from "./multi_turn/muse_output.ts";
 import { assertMuseTurnInterruptOutput } from "./turn_interrupt/muse_output.ts";
 import { piCompactionInput } from "./pi_compaction/input.ts";
@@ -1179,6 +1180,12 @@ export const ORCHESTRATOR_REPLAY_FIXTURES: ReadonlyArray<OrchestratorReplayFixtu
         transcriptFile: new URL("./subagent_v2/muse_transcript.ndjson", import.meta.url),
         modelSelection: MUSE_MODEL_SELECTION,
         assertOutput: assertMuseSubagentV2Output,
+      },
+      {
+        driver: ProviderDriverKind.make("omp"),
+        transcriptFile: new URL("./subagent_v2/omp_transcript.ndjson", import.meta.url),
+        modelSelection: OMP_MODEL_SELECTION,
+        assertOutput: assertOmpSubagentV2Output,
       },
     ],
   },

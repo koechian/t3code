@@ -24,14 +24,25 @@ const PLACEHOLDER_INPUT_HINT = "arguments";
  */
 const T3_PERMANENT_COMPOSER_COMMANDS: ReadonlySet<string> = new Set(["model"]);
 
+/** T3 runs `/goal` through omp's `goal` command; omp offers `/goal` only in its terminal app. */
+export const OMP_GOAL_SLASH_COMMAND: ServerProviderSlashCommand = {
+  name: "goal",
+  description: "Set a goal OMP keeps working toward until it is done",
+  input: { hint: "Objective, or pause, resume, clear" },
+};
+
 function offeredInComposer(name: string): boolean {
-  return !OMP_INTERCEPTED_COMMANDS.has(name) && !T3_PERMANENT_COMPOSER_COMMANDS.has(name);
+  return (
+    !OMP_INTERCEPTED_COMMANDS.has(name) &&
+    !T3_PERMANENT_COMPOSER_COMMANDS.has(name) &&
+    name !== OMP_GOAL_SLASH_COMMAND.name
+  );
 }
 
 /**
  * `skill:<name>` → skill with path `omp:skill:<name>`; drops the placeholder hint `arguments`.
  * Intercepted commands and names T3's composer always offers are left out, so the composer never
- * offers a command that only produces a notice or that duplicates one of T3's.
+ * offers a command that only produces a notice or that duplicates one of T3's. `/goal` is T3's.
  */
 export function parseOmpAvailableCommands(
   commands: ReadonlyArray<OmpAvailableSlashCommand>,
@@ -50,7 +61,7 @@ export function parseOmpAvailableCommands(
       slashCommands.push(ompSlashCommand(name, command));
     }
   }
-  return { slashCommands, skills };
+  return { slashCommands: [...slashCommands, OMP_GOAL_SLASH_COMMAND], skills };
 }
 
 function ompSkill(
@@ -203,6 +214,7 @@ const OMP_TERMINAL_ONLY_NOTICES: ReadonlyMap<string, string> = new Map([
   ["login", "Sign in to omp from a terminal with `omp`, then retry."],
   ["settings", "/settings is a terminal screen; edit omp's config file instead."],
   ["plan", "Plan mode is not available for omp in T3 Code."],
+  ["goal", "/goal takes text only. Send it again without attachments."],
   ["new", "Start a new thread in T3 Code instead of /new."],
   ["resume", "Open the thread in T3 Code instead of /resume."],
 ]);

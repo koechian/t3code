@@ -530,8 +530,9 @@ const nextTurnSelectionHarness = Effect.fn("nextTurnSelectionHarness")(function*
     turn: ProviderAdapter.ProviderAdapterV2SteerInput,
   ) => Effect.Effect<void, ProviderAdapter.ProviderAdapterV2Error> = () => Effect.void,
   extraAdapters: ReadonlyArray<ProviderAdapter.ProviderAdapterV2["Service"]> = [],
+  goalDriver = "opencode",
 ) {
-  const driver = ProviderDriverKind.make(nativeGoals === undefined ? "codex" : "opencode");
+  const driver = ProviderDriverKind.make(nativeGoals === undefined ? "codex" : goalDriver);
   const cwd = yield* checkpointWorkspace(name);
   const events = yield* Queue.unbounded<ProviderAdapter.ProviderAdapterV2Event>();
   const started: ProviderAdapter.ProviderAdapterV2TurnInput[] = [];
@@ -3843,7 +3844,11 @@ it.effect(
     }),
 );
 
-const goalHarness = Effect.fn("goalHarness")(function* (name: string, nativeGoals?: boolean) {
+const goalHarness = Effect.fn("goalHarness")(function* (
+  name: string,
+  nativeGoals?: boolean,
+  goalDriver?: string,
+) {
   const harness = yield* nextTurnSelectionHarness(
     name,
     false,
@@ -3851,6 +3856,9 @@ const goalHarness = Effect.fn("goalHarness")(function* (name: string, nativeGoal
     Effect.void,
     true,
     nativeGoals,
+    undefined,
+    undefined,
+    goalDriver,
   );
   const send = (id: string, text: string, delivery: "queue" | "auto", freshContext = false) =>
     Effect.gen(function* () {
@@ -3911,6 +3919,32 @@ it.effect.each([undefined, false, true])(
           queue: nativeGoals === false ? ["queued", "/goal all tests pass"] : ["queued"],
           started: nativeGoals === false ? ["first"] : ["first", "/goal all tests pass"],
           stopRequested: nativeGoals !== false,
+        });
+      }).pipe(Effect.provide(layer));
+    }),
+);
+
+it.effect.each([false, true])(
+  "OMP goal dispatch stops the active turn only with native support: %s",
+  (nativeGoals) =>
+    Effect.gen(function* () {
+      const { steered, layer, startFirstTurn, send, read } = yield* goalHarness(
+        "goal-steer-omp",
+        nativeGoals,
+        "omp",
+      );
+      yield* Effect.gen(function* () {
+        const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
+        const threadId = yield* startFirstTurn;
+        yield* send("queued", "queued", "queue");
+        yield* send("goal", "/goal all tests pass", "auto");
+        yield* worker.drain();
+
+        assert.deepEqual(steered, []);
+        assert.deepEqual(yield* read(threadId), {
+          queue: nativeGoals ? ["queued"] : ["queued", "/goal all tests pass"],
+          started: nativeGoals ? ["first", "/goal all tests pass"] : ["first"],
+          stopRequested: nativeGoals,
         });
       }).pipe(Effect.provide(layer));
     }),

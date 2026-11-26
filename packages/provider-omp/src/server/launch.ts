@@ -272,15 +272,19 @@ export interface OmpSessionOverlay {
 const yamlString = (value: string) => JSON.stringify(value);
 
 /**
- * Minimal overlay: `tools.approvalMode` plus per-tool allows, and no shell trace. Nothing else of
- * the user's config changes. Names are deduplicated because omp refuses an overlay that does not
- * parse. The trace is a terminal view T3 drops, yet it was ~80% of the bytes in bash frames.
+ * Minimal overlay; nothing else of the user's config changes. omp refuses one that does not parse,
+ * so names are deduplicated. The shell trace was ~80% of bash frame bytes. Without `rpc` in
+ * `goal.continuationModes`, a goal only rides along with the next prompt.
  */
 export function renderOmpSessionOverlay(overlay: OmpSessionOverlay): string {
   const allowed = [...new Set(overlay.allowedToolNames)];
   const lines = [
     "display:",
     "  shellVisualization: false",
+    "goal:",
+    "  continuationModes:",
+    '    - "interactive"',
+    '    - "rpc"',
     "tools:",
     `  approvalMode: ${yamlString(overlay.approvalMode)}`,
   ];

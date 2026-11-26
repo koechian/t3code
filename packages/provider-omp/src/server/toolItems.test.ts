@@ -162,6 +162,7 @@ describe("classifyOmpTool", () => {
     expect(classifyOmpTool("bash", args, ompToolCommandNames([], []))).toBe("tool_command");
     expect(classifyOmpTool("bash", { command: "echo ast_grep" }, TOOL_COMMANDS)).toBe("command");
     expect(classifyOmpTool("ask", {}, TOOL_COMMANDS)).toBe("ask");
+    expect(classifyOmpTool("todo", { op: "view" }, TOOL_COMMANDS)).toBe("todo");
   });
 });
 

@@ -87,7 +87,13 @@ describe("overlays", () => {
     assert.strictEqual(ompApprovalModeForRuntimeMode(runtimeMode), approvalMode);
   });
 
-  it("writes the approval mode, quoted, deduplicated tool allows and no shell trace", () => {
+  it("writes the approval mode, quoted, deduplicated tool allows, no shell trace and RPC goals", () => {
+    const goalContinuation = [
+      "goal:",
+      "  continuationModes:",
+      '    - "interactive"',
+      '    - "rpc"',
+    ];
     assert.strictEqual(
       renderOmpSessionOverlay({
         approvalMode: "always-ask",
@@ -100,6 +106,7 @@ describe("overlays", () => {
       [
         "display:",
         "  shellVisualization: false",
+        ...goalContinuation,
         "tools:",
         '  approvalMode: "always-ask"',
         "  approval:",
@@ -110,7 +117,14 @@ describe("overlays", () => {
     );
     assert.strictEqual(
       renderOmpSessionOverlay({ approvalMode: "yolo", allowedToolNames: [] }),
-      'display:\n  shellVisualization: false\ntools:\n  approvalMode: "yolo"\n',
+      [
+        "display:",
+        "  shellVisualization: false",
+        ...goalContinuation,
+        "tools:",
+        '  approvalMode: "yolo"',
+        "",
+      ].join("\n"),
     );
     assert.include(renderOmpTextGenerationOverlay(), 'memory:\n  backend: "off"\n');
   });

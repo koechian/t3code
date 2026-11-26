@@ -137,10 +137,10 @@ Type `/` for commands or `$` for skills from the selected environment and provid
 
 ## Goals
 
-With Codex, Claude, and OpenCode 2.2.5+, send `/goal <criteria>` (for example, `/goal all tests in packages/api pass`) so the agent keeps working across turns until the goal is met.
+With Codex, Claude, OMP, and OpenCode 2.2.5+, send `/goal <criteria>` (for example, `/goal all tests in packages/api pass`) so the agent keeps working across turns until the goal is met.
 
 - `/goal` shows the current goal; `/goal clear` removes it.
-- Codex and OpenCode support `/goal pause` and `/goal resume` (stopping pauses the goal).
+- Codex, OMP, and OpenCode support `/goal pause` and `/goal resume` (stopping pauses the goal).
 - On Claude, stopping ends the current turn but keeps the goal active for your next message.
 - Sending a new goal or `/goal resume` while working interrupts the current turn unless queued; `/goal clear` and `/goal pause` interrupt only when the agent is actively working on the goal.
 
