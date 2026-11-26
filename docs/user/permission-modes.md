@@ -30,6 +30,7 @@ Providers enforce permissions differently, and some read-only actions proceed ev
 - **Codex**: In **Full access**, skips dangerous-command prompts, though managed network restrictions can still prompt unless commands were allowed for the session.
 - **Grok**: No **Auto-accept edits** (falls back to Supervised). File approvals offer session-wide allow; command approvals do not.
 - **fx**: No **Auto-accept edits**; **Full access** requires fx 0.0.14+ (otherwise falls back to Supervised).
+- **OMP**: No **Auto** (falls back to Supervised).
 - **Muse Code & Kiro**: Only **Supervised** and **Full access** (other modes fall back to Supervised). In Supervised, Kiro also asks you to review turn file changes; see [Kiro](./providers-kiro.md#permission-modes).
 - **Antigravity**: May still send native approval prompts in **Full access**.
 - **ACP Registry agents**: T3 Code answers their approval requests according to the selected mode; see [ACP Registry permissions](./providers-acp.md#permissions-and-terminals).

@@ -1,0 +1,4 @@
+{"line":64,"frame":{"type":"tool_execution_start","toolCallId":"toolu_01Jkgv7Uhdb9DCuwRYSxF1on","toolName":"bash","args":{"command":"sleep 10; echo slept"}}}
+{"line":67,"frame":{"type":"tool_execution_update","toolCallId":"toolu_01Jkgv7Uhdb9DCuwRYSxF1on","toolName":"bash","args":{"command":"sleep 10; echo slept"},"partialResult":{"content":[{"type":"text","text":""}],"details":{}}}}
+{"line":68,"frame":{"type":"tool_execution_end","toolCallId":"toolu_01Jkgv7Uhdb9DCuwRYSxF1on","toolName":"bash","result":{"content":[{"type":"text","text":"Command aborted"}],"details":{}},"isError":true}}
+{"line":72,"frame":{"type":"tool_execution_update","toolCallId":"toolu_01Jkgv7Uhdb9DCuwRYSxF1on","toolName":"bash","args":{"command":"sleep 10; echo slept"},"partialResult":{"content":[{"type":"text","text":"[Command cancelled]\n"}],"details":{}}}}

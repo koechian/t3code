@@ -20,6 +20,7 @@ const RUNTIME_MODEL_CATALOG_DRIVERS: ReadonlySet<string> = new Set([
   "antigravity",
   "cursor",
   "pi",
+  "omp",
   "acpRegistry",
 ]);
 

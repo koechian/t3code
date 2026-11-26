@@ -116,6 +116,23 @@ export const DESCRIPTOR_PRESETS_BY_KIND: Partial<
       ],
     },
   ],
+  [ProviderDriverKind.make("omp")]: [
+    {
+      id: "thinking",
+      label: msg("Thinking", { $context: "model option name" }),
+      type: "select",
+      choices: [
+        { id: "auto", label: msg("Auto", { $context: "reasoning level" }), isDefault: true },
+        { id: "off", label: msg("Off", { $context: "reasoning level" }) },
+        { id: "minimal", label: msg("Minimal", { $context: "reasoning level" }) },
+        { id: "low", label: msg("Low", { $context: "reasoning level" }) },
+        { id: "medium", label: msg("Medium", { $context: "reasoning level" }) },
+        { id: "high", label: msg("High", { $context: "reasoning level" }) },
+        { id: "xhigh", label: msg("Extra High", { $context: "reasoning level" }) },
+        { id: "max", label: msg("Max", { $context: "reasoning level" }) },
+      ],
+    },
+  ],
   [ProviderDriverKind.make("opencode")]: [
     {
       id: "variant",

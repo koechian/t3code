@@ -80,6 +80,7 @@ import { assertMessageSteeringOutput } from "./message_steering/codex_output.ts"
 import { assertCursorMessageSteeringOutput } from "./message_steering/cursor_output.ts";
 import { assertGrokMessageSteeringOutput } from "./message_steering/grok_output.ts";
 import { messageSteeringInput } from "./message_steering/input.ts";
+import { assertOmpMessageSteeringOutput } from "./message_steering/omp_output.ts";
 import { assertPiMessageSteeringOutput } from "./message_steering/pi_output.ts";
 import { MUSE_PERMISSION_DECLINED_FILE, musePermissionInput } from "./muse_permission/input.ts";
 import { assertMusePermissionOutput } from "./muse_permission/output.ts";
@@ -89,6 +90,10 @@ import { museSubagentInterruptInput } from "./muse_subagent_interrupt/input.ts";
 import { assertMuseSubagentInterruptOutput } from "./muse_subagent_interrupt/output.ts";
 import { museWorkflowInput } from "./muse_workflow/input.ts";
 import { assertMuseWorkflowOutput } from "./muse_workflow/output.ts";
+import { ompSupervisedWriteInput } from "./omp_supervised_write/input.ts";
+import { assertOmpSupervisedWriteOutput } from "./omp_supervised_write/output.ts";
+import { ompThreadRollbackInput } from "./omp_thread_rollback/input.ts";
+import { assertOmpThreadRollbackOutput } from "./omp_thread_rollback/output.ts";
 import { assertMuseSubagentV2Output } from "./subagent_v2/muse_output.ts";
 import { assertMuseMultiTurnOutput } from "./multi_turn/muse_output.ts";
 import { assertMuseTurnInterruptOutput } from "./turn_interrupt/muse_output.ts";
@@ -243,6 +248,7 @@ import {
   turnInterruptMidToolKiroInput,
 } from "./turn_interrupt_mid_tool/input.ts";
 import { assertTurnInterruptMidToolKiroOutput } from "./turn_interrupt_mid_tool/kiro_output.ts";
+import { assertTurnInterruptMidToolOmpOutput } from "./turn_interrupt_mid_tool/omp_output.ts";
 import { assertTurnInterruptMidToolPiOutput } from "./turn_interrupt_mid_tool/pi_output.ts";
 import { assertTurnInterruptRestartClaudeOutput } from "./turn_interrupt_restart/claude_output.ts";
 import { turnInterruptRestartInput } from "./turn_interrupt_restart/input.ts";
@@ -258,6 +264,7 @@ import {
   GROK_MODEL_SELECTION,
   KIRO_MODEL_SELECTION,
   MUSE_MODEL_SELECTION,
+  OMP_MODEL_SELECTION,
   OPENCODE_MODEL_SELECTION,
   OPENCODE2_MODEL_SELECTION,
   PI_MODEL_SELECTION,
@@ -914,6 +921,12 @@ export const ORCHESTRATOR_REPLAY_FIXTURES: ReadonlyArray<OrchestratorReplayFixtu
         assertOutput: assertPiSimpleOutput,
       },
       {
+        driver: ProviderDriverKind.make("omp"),
+        transcriptFile: new URL("./simple/omp_transcript.ndjson", import.meta.url),
+        modelSelection: OMP_MODEL_SELECTION,
+        assertOutput: assertSimpleOutput,
+      },
+      {
         driver: ProviderDriverKind.make("muse"),
         transcriptFile: new URL("./simple/muse_transcript.ndjson", import.meta.url),
         modelSelection: MUSE_MODEL_SELECTION,
@@ -1567,10 +1580,40 @@ export const ORCHESTRATOR_REPLAY_FIXTURES: ReadonlyArray<OrchestratorReplayFixtu
         assertOutput: assertPiMultiTurnOutput,
       },
       {
+        driver: ProviderDriverKind.make("omp"),
+        transcriptFile: new URL("./multi_turn/omp_transcript.ndjson", import.meta.url),
+        modelSelection: OMP_MODEL_SELECTION,
+        assertOutput: assertMultiTurnOutput,
+      },
+      {
         driver: ProviderDriverKind.make("muse"),
         transcriptFile: new URL("./multi_turn/muse_transcript.ndjson", import.meta.url),
         modelSelection: MUSE_MODEL_SELECTION,
         assertOutput: assertMuseMultiTurnOutput,
+      },
+    ],
+  },
+  {
+    name: "omp_supervised_write",
+    buildInput: ompSupervisedWriteInput,
+    providers: [
+      {
+        driver: ProviderDriverKind.make("omp"),
+        transcriptFile: new URL("./omp_supervised_write/omp_transcript.ndjson", import.meta.url),
+        modelSelection: OMP_MODEL_SELECTION,
+        assertOutput: assertOmpSupervisedWriteOutput,
+      },
+    ],
+  },
+  {
+    name: "omp_thread_rollback",
+    buildInput: ompThreadRollbackInput,
+    providers: [
+      {
+        driver: ProviderDriverKind.make("omp"),
+        transcriptFile: new URL("./omp_thread_rollback/omp_transcript.ndjson", import.meta.url),
+        modelSelection: OMP_MODEL_SELECTION,
+        assertOutput: assertOmpThreadRollbackOutput,
       },
     ],
   },
@@ -1862,6 +1905,12 @@ export const ORCHESTRATOR_REPLAY_FIXTURES: ReadonlyArray<OrchestratorReplayFixtu
         modelSelection: PI_MODEL_SELECTION,
         assertOutput: assertPiMessageSteeringOutput,
       },
+      {
+        driver: ProviderDriverKind.make("omp"),
+        transcriptFile: new URL("./message_steering/omp_transcript.ndjson", import.meta.url),
+        modelSelection: OMP_MODEL_SELECTION,
+        assertOutput: assertOmpMessageSteeringOutput,
+      },
     ],
   },
   {
@@ -1922,6 +1971,13 @@ export const ORCHESTRATOR_REPLAY_FIXTURES: ReadonlyArray<OrchestratorReplayFixtu
         transcriptFile: new URL("./turn_interrupt/muse_transcript.ndjson", import.meta.url),
         modelSelection: MUSE_MODEL_SELECTION,
         assertOutput: assertMuseTurnInterruptOutput,
+      },
+      {
+        driver: ProviderDriverKind.make("omp"),
+        transcriptFile: new URL("./turn_interrupt/omp_transcript.ndjson", import.meta.url),
+        modelSelection: OMP_MODEL_SELECTION,
+        runtimePolicyOverride: WORKSPACE_NEVER_POLICY,
+        assertOutput: assertTurnInterruptOutput,
       },
     ],
   },
@@ -2037,6 +2093,12 @@ export const ORCHESTRATOR_REPLAY_FIXTURES: ReadonlyArray<OrchestratorReplayFixtu
         transcriptFile: new URL("./turn_interrupt_mid_tool/pi_transcript.ndjson", import.meta.url),
         modelSelection: PI_MODEL_SELECTION,
         assertOutput: assertTurnInterruptMidToolPiOutput,
+      },
+      {
+        driver: ProviderDriverKind.make("omp"),
+        transcriptFile: new URL("./turn_interrupt_mid_tool/omp_transcript.ndjson", import.meta.url),
+        modelSelection: OMP_MODEL_SELECTION,
+        assertOutput: assertTurnInterruptMidToolOmpOutput,
       },
     ],
   },
