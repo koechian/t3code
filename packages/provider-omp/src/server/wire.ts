@@ -33,6 +33,18 @@ export function ompRecordBoolean(input: unknown, key: string): boolean | undefin
   return Predicate.isBoolean(value) ? value : undefined;
 }
 
+/** The text of an omp message's `content`: a string, or the text blocks of a block array. */
+export function ompContentText(content: unknown): string {
+  if (!Array.isArray(content)) {
+    return typeof content === "string" ? content : "";
+  }
+  return content
+    .map((block) =>
+      ompRecordField(block, "type") === "text" ? (ompRecordString(block, "text") ?? "") : "",
+    )
+    .join("");
+}
+
 const OpenRecord = Schema.Record(Schema.String, Schema.Unknown);
 
 export const OmpReadyFrame = Schema.Struct({
@@ -171,6 +183,40 @@ export const OmpToolExecutionEndFrame = Schema.Struct({
   isError: Schema.optional(Schema.Boolean),
 });
 export type OmpToolExecutionEndFrame = typeof OmpToolExecutionEndFrame.Type;
+
+/** Subscription level `progress` (task/session-observer-registry.ts:24-40). */
+export const OmpSubagentLifecycleFrame = Schema.Struct({
+  type: Schema.Literal("subagent_lifecycle"),
+  payload: Schema.Struct({
+    id: Schema.String,
+    /** started, completed, failed or aborted. */
+    status: Schema.String,
+    parentToolCallId: Schema.optional(Schema.String),
+    description: Schema.optional(Schema.String),
+  }),
+});
+export type OmpSubagentLifecycleFrame = typeof OmpSubagentLifecycleFrame.Type;
+
+/** omp's `AgentProgress` (task/task-details.ts:191-308), reduced to what a row shows. */
+export const OmpSubagentProgress = Schema.Struct({
+  id: Schema.String,
+  status: Schema.String,
+  description: Schema.optional(Schema.String),
+  lastIntent: Schema.optional(Schema.String),
+  currentTool: Schema.optional(Schema.String),
+  currentToolArgs: Schema.optional(Schema.String),
+  resolvedModelIdentity: Schema.optional(Schema.String),
+});
+export type OmpSubagentProgress = typeof OmpSubagentProgress.Type;
+
+export const OmpSubagentProgressFrame = Schema.Struct({
+  type: Schema.Literal("subagent_progress"),
+  payload: Schema.Struct({
+    assignment: Schema.optional(Schema.String),
+    progress: OmpSubagentProgress,
+  }),
+});
+export type OmpSubagentProgressFrame = typeof OmpSubagentProgressFrame.Type;
 
 /**
  * Edit-only diff preview, sent while the model streams the arguments (often before
@@ -341,6 +387,25 @@ export const OmpAvailableCommandsUpdateFrame = Schema.Struct({
   type: Schema.Literal("available_commands_update"),
   commands: Schema.Array(OmpAvailableSlashCommand),
 });
+
+/** Upstream `Goal` (tools/details/goal.ts). */
+export const OmpGoal = Schema.Struct({
+  objective: Schema.String,
+  status: Schema.Literals(["active", "paused", "budget-limited", "complete", "dropped"]),
+  tokenBudget: Schema.optional(Schema.NullOr(Schema.Number)),
+  tokensUsed: Schema.Number,
+  timeUsedSeconds: Schema.Number,
+});
+export type OmpGoal = typeof OmpGoal.Type;
+
+/** One frame per goal change, and one per tool call while a goal counts tokens. */
+export const OmpGoalUpdatedFrame = Schema.Struct({
+  type: Schema.Literal("goal_updated"),
+  goal: Schema.NullOr(OmpGoal),
+});
+
+/** The `goal` command's result and `get_state.goal` (a `GoalModeState`) both carry `goal`. */
+export const OmpGoalResult = Schema.Struct({ goal: Schema.NullOr(OmpGoal) });
 
 const uiRequest = <Method extends string, Fields extends Schema.Struct.Fields>(
   method: Method,
@@ -731,7 +796,17 @@ export type OmpCommand =
   | { readonly type: "get_session_lease"; readonly sessionIds: ReadonlyArray<string> }
   | { readonly type: "get_last_assistant_text" }
   | { readonly type: "get_subagents" }
-  | { readonly type: "cancel_subagent"; readonly subagentId: string };
+  | { readonly type: "cancel_subagent"; readonly subagentId: string }
+  | {
+      readonly type: "set_subagent_subscription";
+      readonly level: "off" | "progress" | "events";
+    }
+  | { readonly type: "get_subagent_messages"; readonly subagentId: string }
+  | {
+      readonly type: "goal";
+      readonly op: "get" | "create" | "resume" | "pause" | "drop";
+      readonly objective?: string;
+    };
 
 export type OmpCommandType = OmpCommand["type"];
 
@@ -765,6 +840,8 @@ export const OmpInboundFrame = Schema.Union([
   OmpToolExecutionUpdateFrame,
   OmpToolExecutionEndFrame,
   OmpToolStreamUpdateFrame,
+  OmpSubagentLifecycleFrame,
+  OmpSubagentProgressFrame,
   OmpManualCompactionStartFrame,
   OmpManualCompactionEndFrame,
   OmpAutoCompactionStartFrame,
@@ -782,11 +859,12 @@ export const OmpInboundFrame = Schema.Union([
   OmpModelChangedFrame,
   OmpConfigUpdateFrame,
   OmpAvailableCommandsUpdateFrame,
+  OmpGoalUpdatedFrame,
   OmpExtensionUiRequest,
   OmpHostToolCallFrame,
   OmpHostToolCancelFrame,
 ]);
 export type OmpInboundFrame = typeof OmpInboundFrame.Type;
 
-/** None for frame types T3 does not use (advisor_cost_changed, subagent_*, goal_updated, ...). */
+/** None for frame types T3 does not use (advisor_cost_changed, subagent_event, ...). */
 export const decodeOmpInboundFrame = Schema.decodeUnknownOption(OmpInboundFrame);

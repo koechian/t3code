@@ -5,12 +5,16 @@
  * Copy-and-adapt of packages/provider-pi/src/server/adapter.ts (see MODULES.md).
  */
 import {
+  isOrchestrationV2WorkActive,
   ProviderDriverKind,
   type ChatAttachment,
   type MessageId,
   type ModelSelection,
   type OrchestrationV2ExecutionNode,
+  type OrchestrationV2GoalCommand,
+  type OrchestrationV2PlanArtifact,
   type OrchestrationV2ProviderFailure,
+  type OrchestrationV2ProviderGoal,
   type OrchestrationV2ProviderRef,
   type OrchestrationV2ProviderRetry,
   type OrchestrationV2ProviderSession,
@@ -18,7 +22,9 @@ import {
   type OrchestrationV2ProviderTurn,
   type OrchestrationV2ProviderTurnTokenUsage,
   type OrchestrationV2RuntimeRequest,
+  type OrchestrationV2Subagent,
   type OrchestrationV2TurnItem,
+  type PlanId,
   type ProviderApprovalDecision,
   type ProviderInstanceId,
   type ProviderTurnId,
@@ -93,6 +99,17 @@ import {
   type T3McpClient,
 } from "./hostTools.ts";
 import {
+  ompGoalAfterRead,
+  ompGoalCommandOf,
+  ompGoalCommands,
+  ompGoalFromState,
+  ompGoalOutcome,
+  ompGoalReply,
+  ompProviderGoal,
+  ompProviderGoalsEqual,
+  type OmpGoalOutcome,
+} from "./goals.ts";
+import {
   buildOmpRpcLaunch,
   composeOmpAppendSystemPrompt,
   makeOmpUnattendedOverlay,
@@ -128,6 +145,17 @@ import {
   sessionFileMatchesCwd,
 } from "./sessions.ts";
 import {
+  ompStartedSubagentFields,
+  ompSubagentFieldsAfterProgress,
+  ompSubagentFieldsEqual,
+  ompSubagentFinalText,
+  ompSubagentResultsFromMessage,
+  ompSubagentResultsFromWait,
+  ompSubagentTerminalStatus,
+  type OmpSubagentFields,
+} from "./subagents.ts";
+import { ompTodoListFromEnd } from "./todos.ts";
+import {
   classifyOmpTool,
   isOmpBackgroundJobCompletion,
   ompCommandOutputProgress,
@@ -152,6 +180,7 @@ import {
   OmpPromptAck,
   OmpSessionState,
   OmpSubagentList,
+  ompContentText,
   ompRecordBoolean,
   ompRecordField,
   ompRecordNumber,
@@ -167,6 +196,7 @@ import {
   type OmpRecord,
   type OmpResponseFrame,
   type OmpStreamingBehavior,
+  type OmpSubagentLifecycleFrame,
   type OmpThinkingSelector,
   type OmpToolExecutionEndFrame,
   type OmpToolExecutionStartFrame,
@@ -231,17 +261,6 @@ export interface OmpAdapterV2Options {
       request: ProviderContinuationRequests.ProviderContinuationRequest,
     ) => Effect.Effect<void>;
   };
-}
-
-function contentText(content: unknown): string {
-  if (!Array.isArray(content)) {
-    return typeof content === "string" ? content : "";
-  }
-  return content
-    .map((block) =>
-      ompRecordField(block, "type") === "text" ? (ompRecordString(block, "text") ?? "") : "",
-    )
-    .join("");
 }
 
 function providerRef(
@@ -388,6 +407,44 @@ interface OmpProviderRetryState {
 
 type OmpToolRowStatus = "completed" | "failed" | "interrupted";
 
+/** An ask call renders as its form dialog and a todo call as the turn's todo list. */
+const ROWLESS_TOOL_KINDS: ReadonlySet<OmpToolKind> = new Set(["ask", "todo"]);
+
+/** The todo list a provider turn shows: one plan per turn, updated by each snapshot. */
+interface OmpTodoPlanSlot {
+  readonly providerTurnId: ProviderTurnId;
+  readonly planId: PlanId;
+  readonly startedAt: DateTime.Utc;
+}
+
+interface OmpTodoPlanState extends OmpTodoPlanSlot {
+  readonly plan: OrchestrationV2PlanArtifact;
+}
+
+/**
+ * One omp child (a `task` call's subagent), shown under that call in the turn that started it. It
+ * holds the turn's background work until it ends and its result arrived, which can be turns later.
+ */
+interface OmpSubagentRow {
+  readonly childId: string;
+  readonly turn: ActiveOmpTurn;
+  readonly nativeItemId: string;
+  readonly parentToolCallId: string | undefined;
+  readonly startedAt: DateTime.Utc;
+  fields: OmpSubagentFields;
+  result: string | null;
+  completedAt: DateTime.Utc | null;
+  /** The node is emitted again only when its status changes. */
+  nodeStatus: OmpSubagentFields["status"] | undefined;
+  /** Progress the row has not emitted yet. */
+  stale: boolean;
+  flushScheduled: boolean;
+  lastEmittedAtMs: number;
+}
+
+/** omp sends a child's progress several times a second; a row shows about two updates a second. */
+const SUBAGENT_PROGRESS_INTERVAL_MS = 500;
+
 interface OmpToolRowState {
   readonly start: OmpToolExecutionStartFrame;
   readonly kind: OmpToolKind;
@@ -410,12 +467,20 @@ type OmpTurnSettlement =
   | { readonly kind: "rejected"; readonly message: string }
   | { readonly kind: "compact"; readonly error: string | undefined }
   | { readonly kind: "session_settled" }
-  | { readonly kind: "intercepted" };
+  | { readonly kind: "intercepted" }
+  | { readonly kind: "goal_command" };
+
+/** How a turn's message runs: as omp's slash commands do, or as a `/goal` control command. */
+type OmpTurnDisposition =
+  | OmpSlashDisposition
+  | { readonly kind: "goal"; readonly command: OrchestrationV2GoalCommand };
+
+type OmpProviderGoal = OrchestrationV2ProviderGoal | null;
 
 interface PendingOmpPrompt {
   readonly id: string;
   readonly turn: ActiveOmpTurn;
-  readonly kind: "turn_start" | "steer" | "compact";
+  readonly kind: "turn_start" | "steer" | "compact" | "goal";
   readonly messageId: MessageId | undefined;
   readonly acknowledged: Deferred.Deferred<void>;
   responded: boolean;
@@ -442,6 +507,8 @@ interface ActiveOmpTurn {
   readonly editPreviews: Map<string, OmpEditPreview>;
   readonly slashCommand: boolean;
   readonly continuation: boolean;
+  /** A `/goal` control turn ends on the reply to its last `goal` command. */
+  readonly goalCommand: OrchestrationV2GoalCommand | undefined;
   readonly beforeBranch: ReadonlyArray<OmpBranchMessage> | undefined;
   mainPrompt: PendingOmpPrompt | undefined;
   settlement: OmpTurnSettlement | undefined;
@@ -729,6 +796,14 @@ function snapshotThread(
   providerThread: OrchestrationV2ProviderThread,
 ): ProviderAdapter.ProviderAdapterV2ThreadSnapshot {
   return { providerThread, messages: [], runtimeRequests: [] };
+}
+
+/** The goal a registered thread shows; undefined `read` means omp reported none that decodes. */
+function registeredGoal(
+  previous: OmpProviderGoal | undefined,
+  read: OmpProviderGoal | undefined,
+): OmpProviderGoal {
+  return read === undefined ? (previous ?? null) : ompGoalAfterRead(previous, read);
 }
 
 /**
@@ -1067,6 +1142,8 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
       // After every spawn and before the first prompt (DECISIONS: Process and transport).
       const configureProcess = Effect.fnUntraced(function* () {
         yield* request({ type: "set_event_filter", events: null, messageUpdates: "delta" });
+        // `events` would also forward every child's full message stream.
+        yield* request({ type: "set_subagent_subscription", level: "progress" });
         yield* request({ type: "set_ask_dialog", enabled: true });
         yield* request({ type: "set_interrupt_mode", mode: "wait" });
         yield* registerHostTools();
@@ -1164,6 +1241,9 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
       let lastBranchMessages: ReadonlyArray<OmpBranchMessage> | undefined;
       let contextWindow: number | null = null;
       const modelContextWindows = new Map<string, number>();
+      let latestTodoPlan: OmpTodoPlanState | null = null;
+      /** By omp child id, until the child ended and its result arrived. */
+      const subagentRows = new Map<string, OmpSubagentRow>();
 
       const emit = (event: ProviderAdapter.ProviderAdapterV2Event) =>
         Queue.offer(events, event).pipe(Effect.asVoid);
@@ -1219,6 +1299,17 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
           providerThread: state.providerThread,
         });
       });
+
+      // omp reports a goal once per tool call while it counts tokens; only changes are published.
+      const publishGoal = (state: OmpThreadState, goal: OmpProviderGoal) =>
+        ompProviderGoalsEqual(state.providerThread.goal ?? null, goal)
+          ? Effect.void
+          : updateProviderThread(state, { goal });
+
+      const publishReadGoal = (state: OmpThreadState, read: OmpProviderGoal | undefined) =>
+        read === undefined
+          ? Effect.void
+          : publishGoal(state, ompGoalAfterRead(state.providerThread.goal, read));
 
       const sameSessionFile = (a: string | null | undefined, b: string | null | undefined) =>
         a != null && b != null && path.resolve(cwd, a) === path.resolve(cwd, b);
@@ -1632,6 +1723,77 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         yield* emit({ type: "turn_item.updated", driver: OMP_PROVIDER, turnItem });
       });
 
+      /** omp's list outlives the turn, so each turn's first snapshot supersedes the last plan. */
+      const todoPlanSlot = Effect.fnUntraced(function* (turn: ActiveOmpTurn) {
+        const previous = latestTodoPlan;
+        if (previous?.providerTurnId === turn.providerTurn.id) return previous;
+        if (previous !== null) {
+          yield* emit({
+            type: "plan.updated",
+            driver: OMP_PROVIDER,
+            plan: { ...previous.plan, status: "superseded" },
+          });
+        }
+        const slot: OmpTodoPlanSlot = {
+          providerTurnId: turn.providerTurn.id,
+          planId: yield* idAllocator.allocate.plan({
+            threadId: turn.turnInput.threadId,
+            runId: turn.turnInput.runId,
+            driver: OMP_PROVIDER,
+          }),
+          startedAt: yield* DateTime.now,
+        };
+        return slot;
+      });
+
+      const emitTodoList = Effect.fnUntraced(function* (
+        turn: ActiveOmpTurn,
+        end: OmpToolExecutionEndFrame,
+      ) {
+        const list = ompTodoListFromEnd(end);
+        if (list === undefined) return;
+        const slot = yield* todoPlanSlot(turn);
+        const nativeItemId = `omp-todo:${turn.providerTurn.id}`;
+        const updatedAt = yield* DateTime.now;
+        const base = baseItemFields(turn, nativeItemId, slot.startedAt, updatedAt);
+        const detail = {
+          steps: list.steps,
+          ...(list.explanation === undefined ? {} : { explanation: list.explanation }),
+        };
+        const plan: OrchestrationV2PlanArtifact = {
+          id: slot.planId,
+          threadId: base.threadId,
+          runId: base.runId,
+          nodeId: base.nodeId,
+          kind: "todo_list",
+          status: list.completed ? "completed" : "active",
+          ...detail,
+        };
+        latestTodoPlan = { ...slot, plan };
+        yield* emitItemNode(
+          turn,
+          nativeItemId,
+          "todo_list",
+          "completed",
+          slot.startedAt,
+          updatedAt,
+        );
+        yield* emit({ type: "plan.updated", driver: OMP_PROVIDER, plan });
+        yield* emit({
+          type: "turn_item.updated",
+          driver: OMP_PROVIDER,
+          turnItem: {
+            ...base,
+            status: "completed",
+            title: null,
+            completedAt: updatedAt,
+            type: "todo_list",
+            planId: slot.planId,
+            ...detail,
+          },
+        });
+      });
+
       const emitCommandOutputDelta = (turn: ActiveOmpTurn, toolCallId: string, chunk: string) =>
         chunk.length === 0
           ? Effect.void
@@ -1679,7 +1841,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
       });
 
       const releaseHoldIfIdle = Effect.fnUntraced(function* (hold: OmpBackgroundHold) {
-        if (hold.awaitingSettle || hold.jobs.size > 0) return;
+        if (hold.awaitingSettle || hold.jobs.size > 0 || subagentsOf(hold.turn).length > 0) return;
         if (backgroundHolds.get(hold.turn.providerTurn.id) !== hold) return;
         backgroundHolds.delete(hold.turn.providerTurn.id);
         yield* cancelHeldRequests(hold);
@@ -1719,6 +1881,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
           for (const toolCallId of Array.from(hold.jobs.keys())) {
             yield* closeBackgroundJob(hold, toolCallId, status, undefined);
           }
+          yield* settleHeldSubagents(hold, jobsLost);
           yield* releaseHoldIfIdle(hold);
         }
       });
@@ -1729,6 +1892,256 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         }
         return undefined;
       };
+
+      const subagentsOf = (turn: ActiveOmpTurn) =>
+        Array.from(subagentRows.values()).filter((row) => row.turn === turn);
+
+      const subagentIsLive = (row: OmpSubagentRow) =>
+        isOrchestrationV2WorkActive(row.fields.status);
+
+      /** Stop cancels every child, so a child that ends aborted afterwards was stopped by T3. */
+      const subagentStoppedByT3 = (row: OmpSubagentRow) =>
+        stopRequested || backgroundHolds.get(row.turn.providerTurn.id)?.stopped === true;
+
+      const subagentRecord = (
+        row: OmpSubagentRow,
+        updatedAt: DateTime.Utc,
+      ): OrchestrationV2Subagent => ({
+        id: idAllocator.derive.nodeFromProviderItem({
+          driver: OMP_PROVIDER,
+          nativeItemId: row.nativeItemId,
+        }),
+        threadId: row.turn.turnInput.threadId,
+        runId: row.turn.turnInput.runId,
+        parentNodeId:
+          row.parentToolCallId === undefined
+            ? row.turn.turnInput.rootNodeId
+            : idAllocator.derive.nodeFromProviderItem({
+                driver: OMP_PROVIDER,
+                nativeItemId: row.parentToolCallId,
+              }),
+        origin: "provider_native",
+        createdBy: "agent",
+        driver: OMP_PROVIDER,
+        providerInstanceId: options.instanceId,
+        providerThreadId: row.turn.turnInput.providerThread.id,
+        childThreadId: null,
+        nativeTaskRef: providerRef(row.childId),
+        prompt: row.fields.prompt,
+        title: row.fields.title,
+        model: row.fields.model,
+        status: row.fields.status,
+        ...(row.fields.progress === undefined ? {} : { progress: row.fields.progress }),
+        result: row.result,
+        startedAt: row.startedAt,
+        completedAt: row.completedAt,
+        updatedAt,
+      });
+
+      /* Provider events include subagent progress; avoid a span for each update. */
+      const emitSubagentRow = Effect.fnUntraced(function* (row: OmpSubagentRow) {
+        const updatedAt = yield* DateTime.now;
+        row.stale = false;
+        row.lastEmittedAtMs = DateTime.toEpochMillis(updatedAt);
+        const status = row.fields.status;
+        if (row.nodeStatus !== status) {
+          row.nodeStatus = status;
+          yield* emitItemNode(
+            row.turn,
+            row.nativeItemId,
+            "subagent",
+            status,
+            row.startedAt,
+            row.completedAt,
+            row.parentToolCallId,
+          );
+        }
+        const subagent = subagentRecord(row, updatedAt);
+        yield* emit({ type: "subagent.updated", driver: OMP_PROVIDER, subagent });
+        yield* emit({
+          type: "turn_item.updated",
+          driver: OMP_PROVIDER,
+          turnItem: {
+            ...baseItemFields(row.turn, row.nativeItemId, row.startedAt, updatedAt),
+            status,
+            title: subagent.title,
+            completedAt: row.completedAt,
+            type: "subagent",
+            subagentId: subagent.id,
+            origin: subagent.origin,
+            driver: OMP_PROVIDER,
+            providerInstanceId: options.instanceId,
+            childThreadId: null,
+            prompt: subagent.prompt,
+            ...(subagent.progress === undefined ? {} : { progress: subagent.progress }),
+            result: subagent.result,
+          },
+        });
+      });
+
+      const flushSubagentProgress = (row: OmpSubagentRow) =>
+        Effect.suspend(() => {
+          row.flushScheduled = false;
+          const current = subagentRows.get(row.childId) === row && subagentIsLive(row);
+          return current && row.stale ? emitSubagentRow(row) : Effect.void;
+        });
+
+      /* Per-progress handler; shares the pump's span. The latest progress always lands. */
+      const reportSubagentProgress = Effect.fnUntraced(function* (row: OmpSubagentRow) {
+        const now = yield* Clock.currentTimeMillis;
+        const due = row.lastEmittedAtMs + SUBAGENT_PROGRESS_INTERVAL_MS;
+        if (now >= due) return yield* emitSubagentRow(row);
+        if (row.flushScheduled) return;
+        row.flushScheduled = true;
+        yield* Effect.sleep(Duration.millis(due - now)).pipe(
+          Effect.andThen(sessionEventPermit.withPermits(1)(flushSubagentProgress(row))),
+          Effect.forkIn(scope),
+        );
+      });
+
+      /**
+       * omp can report a task call's first child before the call itself. Clients order rows by
+       * arrival, so the call's row is shown first; its start fills in the arguments.
+       */
+      const showTaskCallBeforeStart = Effect.fnUntraced(function* (
+        turn: ActiveOmpTurn,
+        toolCallId: string,
+      ) {
+        if (turn.tools.has(toolCallId)) return;
+        const start: OmpToolExecutionStartFrame = {
+          type: "tool_execution_start",
+          toolCallId,
+          toolName: "task",
+        };
+        const row: OmpToolRowState = {
+          start,
+          kind: classifyOmpTool(start.toolName, start.args, toolCommands),
+          startedAt: yield* DateTime.now,
+          latestOutput: "",
+          ended: false,
+          backgroundJobId: undefined,
+          lastBody: undefined,
+        };
+        turn.tools.set(toolCallId, row);
+        yield* emitToolRow(turn, toolCallId, row, ompToolItemFromStart(start, row.kind), "running");
+      });
+
+      /** The running turn, or a turn held for background work, that made tool call `toolCallId`. */
+      const turnOwningToolCall = (toolCallId: string | undefined) => {
+        if (toolCallId === undefined) return undefined;
+        const active = threadState?.activeTurn ?? null;
+        if (active?.tools.has(toolCallId) === true) return active;
+        for (const hold of backgroundHolds.values()) {
+          if (hold.turn.tools.has(toolCallId)) return hold.turn;
+        }
+        return undefined;
+      };
+
+      /**
+       * A child belongs to the turn whose task call started it, or to the running turn when omp
+       * reports it before that call. omp names a child's own children `<child>.<name>`; their task
+       * call runs inside the child, so they get no row (UP/task/output-manager.ts:88-95).
+       */
+      const startSubagentRow = Effect.fnUntraced(function* (
+        payload: OmpSubagentLifecycleFrame["payload"],
+      ) {
+        if (subagentRows.has(payload.id)) return;
+        const owner = turnOwningToolCall(payload.parentToolCallId);
+        if (owner === undefined && payload.id.includes(".")) return;
+        const turn = owner ?? threadState?.activeTurn ?? null;
+        if (turn === null) return;
+        if (payload.parentToolCallId !== undefined) {
+          yield* showTaskCallBeforeStart(turn, payload.parentToolCallId);
+        }
+        yield* holdBackgroundWork(turn);
+        const row: OmpSubagentRow = {
+          childId: payload.id,
+          turn,
+          nativeItemId: `omp-subagent:${turn.providerTurn.id}:${payload.id}`,
+          parentToolCallId: payload.parentToolCallId,
+          startedAt: yield* DateTime.now,
+          fields: ompStartedSubagentFields(payload.id, payload.description),
+          result: null,
+          completedAt: null,
+          nodeStatus: undefined,
+          stale: false,
+          flushScheduled: false,
+          lastEmittedAtMs: 0,
+        };
+        subagentRows.set(payload.id, row);
+        yield* emitSubagentRow(row);
+      });
+
+      /** The row's last update: it stops holding its turn's background work. */
+      const finishSubagentRow = Effect.fnUntraced(function* (row: OmpSubagentRow) {
+        subagentRows.delete(row.childId);
+        yield* emitSubagentRow(row);
+        const hold = backgroundHolds.get(row.turn.providerTurn.id);
+        if (hold !== undefined) yield* releaseHoldIfIdle(hold);
+      });
+
+      const endSubagentRow = Effect.fnUntraced(function* (
+        row: OmpSubagentRow,
+        status: OmpSubagentFields["status"],
+      ) {
+        row.fields = { ...row.fields, status, progress: undefined };
+        row.completedAt = yield* DateTime.now;
+        if (row.result !== null) return yield* finishSubagentRow(row);
+        // The result can come turns later, in the run omp starts to deliver it.
+        yield* emitSubagentRow(row);
+      });
+
+      const resolveSubagentResults = Effect.fnUntraced(function* (
+        results: ReadonlyMap<string, string>,
+      ) {
+        for (const [childId, result] of results) {
+          const row = subagentRows.get(childId);
+          if (row === undefined) continue;
+          row.result = result;
+          if (!subagentIsLive(row)) yield* finishSubagentRow(row);
+        }
+      });
+
+      /** Rows T3 stops following: Stop cancelled their children, or omp is gone. */
+      const settleSubagentRows = Effect.fnUntraced(function* (
+        rows: ReadonlyArray<OmpSubagentRow>,
+        status: "interrupted" | "failed",
+      ) {
+        for (const row of rows) {
+          subagentRows.delete(row.childId);
+          if (!subagentIsLive(row)) continue;
+          row.fields = { ...row.fields, status, progress: undefined };
+          row.completedAt = yield* DateTime.now;
+          yield* emitSubagentRow(row);
+        }
+      });
+
+      /** Only when neither omp's delivery nor a wait carried the result by `session_settled`. */
+      const readSubagentResult = (row: OmpSubagentRow) =>
+        request(
+          { type: "get_subagent_messages", subagentId: row.childId },
+          OMP_SHORT_REQUEST_TIMEOUT_MS,
+        ).pipe(
+          Effect.map(ompSubagentFinalText),
+          Effect.orElseSucceed(() => null),
+        );
+
+      /** Stop and an exit end held children; a child that ended without its result reads it. */
+      const settleHeldSubagents = Effect.fnUntraced(function* (
+        hold: OmpBackgroundHold,
+        jobsLost: boolean,
+      ) {
+        const rows = subagentsOf(hold.turn);
+        if (jobsLost || hold.stopped) {
+          const stopped = hold.stopped || stopRequested;
+          return yield* settleSubagentRows(rows, stopped ? "interrupted" : "failed");
+        }
+        for (const row of rows) {
+          if (subagentIsLive(row)) continue;
+          row.result = yield* readSubagentResult(row);
+          yield* finishSubagentRow(row);
+        }
+      });
 
       const cancelRequest = Effect.fnUntraced(function* (
         pending: PendingOmpRequest,
@@ -1782,7 +2195,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
 
       const settleOpenTools = Effect.fnUntraced(function* (turn: ActiveOmpTurn, stopped: boolean) {
         for (const [toolCallId, row] of turn.tools) {
-          if (row.ended || row.kind === "ask") continue;
+          if (row.ended || ROWLESS_TOOL_KINDS.has(row.kind)) continue;
           row.ended = true;
           const body =
             row.lastBody ??
@@ -1913,6 +2326,8 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
           status: "failed",
           failure,
           ...(outcome.promptDropped ? { promptDropped: true } : {}),
+          // Children of a failed turn keep running in omp and report their own ends.
+          ...(subagentsOf(turn).length > 0 ? { childTurnsContinue: true } : {}),
           ...(retry === null ? {} : { retry: retry.retry, retryStartedAt: retry.startedAt }),
         });
       });
@@ -1975,6 +2390,18 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         for (const requestId of retained) hold.requests.add(String(requestId));
       });
 
+      /** Children outlive a completed or failed turn; Stop cancels them and an exit ends them. */
+      const settleTurnSubagents = (
+        turn: ActiveOmpTurn,
+        outcome: OmpTurnOutcome,
+        processAlive: boolean,
+      ) => {
+        if (outcome.status === "interrupted") {
+          return settleSubagentRows(subagentsOf(turn), "interrupted");
+        }
+        return processAlive ? Effect.void : settleSubagentRows(subagentsOf(turn), "failed");
+      };
+
       const finalizeTurn = Effect.fnUntraced(function* (
         state: OmpThreadState,
         processAlive = true,
@@ -1987,10 +2414,12 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         yield* adoptLiveSessionFile(state, end.live);
         const outcome = ompTurnOutcome(turn, Option.getOrUndefined(end.live)?.usageLimit);
         const completedAt = yield* DateTime.now;
-        const awaitingWork = turn.awaitingSettle && processAlive && !closed;
+        const processLive = processAlive && !closed;
+        const awaitingWork = turn.awaitingSettle && processLive;
         // A nested tool-command approval backgrounds its row while it waits (TSR§5).
         const keepRequests = awaitingWork && outcome.status === "completed";
         yield* settleTurnItems(turn, outcome, completedAt, keepRequests);
+        yield* settleTurnSubagents(turn, outcome, processLive);
         const retained = keepRequests ? openRuntimeRequestIds() : [];
         yield* emit({
           type: "provider_turn.updated",
@@ -2018,7 +2447,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
       const sendPrompt = Effect.fnUntraced(function* (
         turn: ActiveOmpTurn,
         kind: PendingOmpPrompt["kind"],
-        command: Extract<OmpCommand, { readonly type: "prompt" | "compact" }>,
+        command: Extract<OmpCommand, { readonly type: "prompt" | "compact" | "goal" }>,
         messageId?: MessageId,
       ) {
         const id = `t3-prompt-${nextPromptId++}`;
@@ -2054,12 +2483,59 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         return completeTurnIfSettled(turn);
       };
 
+      /** A read keeps a completed goal omp has forgotten; every other command's reply replaces it. */
+      const applyGoalOutcome = Effect.fnUntraced(function* (
+        command: OrchestrationV2GoalCommand,
+        outcome: OmpGoalOutcome,
+      ) {
+        const state = threadState;
+        if (state === null || "error" in outcome) return outcome;
+        const goal =
+          command.type === "show"
+            ? ompGoalAfterRead(state.providerThread.goal, outcome.goal)
+            : outcome.goal;
+        yield* publishGoal(state, goal);
+        return { goal };
+      });
+
+      /**
+       * A `/goal` control turn ends on the reply to its last command. The goal's work is a run omp
+       * starts on its own afterwards, which arrives as a wake. A control turn that took over a run
+       * omp had already started ends with that run instead (`onSessionSettled`).
+       */
+      const onGoalResponse = Effect.fnUntraced(function* (
+        pending: PendingOmpPrompt,
+        frame: OmpResponseFrame,
+      ) {
+        const turn = pending.turn;
+        pending.resultExpected = false;
+        const command = turn.goalCommand;
+        if (turn.mainPrompt !== pending || command === undefined) {
+          return yield* completeTurnIfSettled(turn);
+        }
+        const reply = ompGoalReply(
+          command,
+          yield* applyGoalOutcome(command, ompGoalOutcome(frame)),
+        );
+        if (reply !== undefined) {
+          yield* emitSystemNotice(
+            turn,
+            `goal-reply:${turn.providerTurn.id}`,
+            reply.message,
+            reply.level,
+          );
+        }
+        if (!turn.adoptedWake) turn.settlement = { kind: "goal_command" };
+        yield* completeTurnIfSettled(turn);
+      });
+
       const onMainPromptResponse = Effect.fnUntraced(function* (
         pending: PendingOmpPrompt,
         frame: OmpResponseFrame,
       ) {
         const turn = pending.turn;
         if (pending.kind === "compact") return yield* onCompactResponse(pending, frame);
+        if (pending.kind === "goal") return yield* onGoalResponse(pending, frame);
         if (!frame.success) {
           pending.resultExpected = false;
           turn.settlement = {
@@ -2204,10 +2680,14 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         yield* connection.terminate;
       });
 
+      /** A turn that took over a run omp started ends when omp settles, unless its prompt does. */
+      const endsWithAdoptedRun = (turn: ActiveOmpTurn) =>
+        turn.adoptedWake && (turn.mainPrompt === undefined || turn.mainPrompt.kind === "goal");
+
       const onSessionSettled = Effect.fnUntraced(function* () {
         yield* releaseBackgroundHolds(false);
         const turn = threadState?.activeTurn ?? null;
-        if (turn === null || turn.mainPrompt !== undefined || !turn.adoptedWake) return;
+        if (turn === null || !endsWithAdoptedRun(turn)) return;
         turn.settlement ??= { kind: "session_settled" };
         yield* completeTurnIfSettled(turn);
       });
@@ -2226,6 +2706,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
             yield* closeBackgroundJob(hold, toolCallId, status, undefined);
           }
         }
+        yield* resolveSubagentResults(ompSubagentResultsFromMessage(message));
       });
 
       const onMessageStart = Effect.fnUntraced(function* (frame: OmpFrameOf<"message_start">) {
@@ -2316,6 +2797,32 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         if (index >= 0) turn.unlinkedToolCallIds.splice(index, 1);
       };
 
+      const onSubagentLifecycle = Effect.fnUntraced(function* (
+        frame: OmpFrameOf<"subagent_lifecycle">,
+      ) {
+        const payload = frame.payload;
+        if (payload.status === "started") return yield* startSubagentRow(payload);
+        const row = subagentRows.get(payload.id);
+        if (row === undefined || !subagentIsLive(row)) return;
+        const status = ompSubagentTerminalStatus(payload.status, subagentStoppedByT3(row));
+        if (status !== undefined) yield* endSubagentRow(row, status);
+      });
+
+      /* Per-progress handler; shares the pump's span. */
+      const onSubagentProgress = Effect.fnUntraced(function* (
+        frame: OmpFrameOf<"subagent_progress">,
+      ) {
+        const row = subagentRows.get(frame.payload.progress.id);
+        if (row === undefined || !subagentIsLive(row)) return;
+        const fields = ompSubagentFieldsAfterProgress(row.fields, frame.payload);
+        if (ompSubagentFieldsEqual(fields, row.fields)) return;
+        const statusChanged = fields.status !== row.fields.status;
+        row.fields = fields;
+        row.stale = true;
+        if (statusChanged) return yield* emitSubagentRow(row);
+        yield* reportSubagentProgress(row);
+      });
+
       const onToolStart = Effect.fnUntraced(function* (frame: OmpFrameOf<"tool_execution_start">) {
         const turn = threadState?.activeTurn ?? null;
         if (turn === null) return;
@@ -2323,7 +2830,8 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         const row: OmpToolRowState = {
           start: frame,
           kind,
-          startedAt: yield* DateTime.now,
+          // A task call's row can already exist for a child omp reported first.
+          startedAt: turn.tools.get(frame.toolCallId)?.startedAt ?? (yield* DateTime.now),
           latestOutput: "",
           ended: false,
           backgroundJobId: undefined,
@@ -2331,8 +2839,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         };
         turn.tools.set(frame.toolCallId, row);
         turn.unlinkedToolCallIds.push(frame.toolCallId);
-        // An ask tool renders as its form dialog, not as a row.
-        if (kind === "ask") return;
+        if (ROWLESS_TOOL_KINDS.has(kind)) return;
         // An edit's preview often arrives before its start (TSR§1.2).
         const body = ompToolItemFromStart(frame, kind, turn.editPreviews.get(frame.toolCallId));
         yield* emitToolRow(turn, frame.toolCallId, row, body, "running");
@@ -2379,6 +2886,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         removeUnlinked(turn, frame.toolCallId);
         const preview = turn.editPreviews.get(frame.toolCallId);
         turn.editPreviews.delete(frame.toolCallId);
+        if (row.kind === "todo") return yield* emitTodoList(turn, frame);
         if (row.kind === "ask") return;
         const completion = ompToolItemFromEnd(
           row.start,
@@ -2831,7 +3339,12 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         message_end: onMessageEnd,
         tool_execution_start: onToolStart,
         tool_execution_update: onToolUpdate,
-        tool_execution_end: onToolEnd,
+        tool_execution_end: (frame) =>
+          onToolEnd(frame).pipe(
+            Effect.andThen(resolveSubagentResults(ompSubagentResultsFromWait(frame))),
+          ),
+        subagent_lifecycle: onSubagentLifecycle,
+        subagent_progress: onSubagentProgress,
         tool_stream_update: onToolStreamUpdate,
         extension_ui_request: onUiRequest,
         host_tool_call: onHostToolCall,
@@ -2861,6 +3374,12 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
               frame.commands.flatMap((command) => [command.name, ...(command.aliases ?? [])]),
             );
           }),
+        goal_updated: (frame) =>
+          Effect.suspend(() =>
+            threadState === null
+              ? Effect.void
+              : publishGoal(threadState, ompProviderGoal(frame.goal)),
+          ),
         thinking_level_changed: (frame) =>
           Effect.sync(() => {
             appliedThinking = frame.thinkingLevel ?? null;
@@ -3079,7 +3598,11 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         appliedThinking ??= state.thinkingLevel ?? null;
         availableThinkingLevels = yield* readThinkingLevels;
         lastBranchMessages = yield* readBranchMessages();
-        return state.sessionFile;
+        // A goal omp restored at startup or on a switch is paused if it was active.
+        return {
+          sessionFile: state.sessionFile,
+          goal: ompGoalFromState(ompRecordField(data, "goal")),
+        };
       });
 
       const switchToExistingSession = Effect.fnUntraced(function* (
@@ -3120,6 +3643,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         nativeId: string,
         createdAt: DateTime.Utc,
         fresh: boolean,
+        goal: OmpProviderGoal | undefined,
       ): OrchestrationV2ProviderThread => {
         const existing = threadInput.existingProviderThread;
         if (existing !== undefined) {
@@ -3128,6 +3652,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
             providerSessionId: input.providerSessionId,
             nativeThreadRef: providerRef(nativeId),
             ...(fresh ? { nativeConversationHeadRef: null, contextUsage: null } : {}),
+            goal: registeredGoal(fresh ? null : existing.goal, goal),
             status: "idle",
             updatedAt: createdAt,
           };
@@ -3147,6 +3672,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
           handoffIds: [],
           forkedFrom: null,
           pendingBackgroundTasks: [],
+          goal: goal ?? null,
           createdAt,
           updatedAt: createdAt,
         };
@@ -3190,12 +3716,13 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
           }
           yield* awaitProcessPreparation;
           const fresh = yield* ensureNativeSession(threadInput, importedNativeSession);
-          const nativeId = yield* readRegisteredState();
+          const registered = yield* readRegisteredState();
           const providerThread = buildProviderThread(
             threadInput,
-            nativeId,
+            registered.sessionFile,
             yield* DateTime.now,
             fresh,
+            registered.goal,
           );
           threadState = { providerThread, activeTurn: null };
           if (publish) {
@@ -3228,9 +3755,11 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
 
       const reregisterThread = (state: OmpThreadState | null) =>
         readRegisteredState().pipe(
-          Effect.flatMap((sessionFile) =>
+          Effect.flatMap((registered) =>
             state !== null && threadState === state
-              ? rebindSessionFile(state, sessionFile)
+              ? rebindSessionFile(state, registered.sessionFile).pipe(
+                  Effect.andThen(publishReadGoal(state, registered.goal)),
+                )
               : Effect.void,
           ),
         );
@@ -3405,7 +3934,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
       const makeActiveTurn = Effect.fnUntraced(function* (
         state: OmpThreadState,
         turnInput: ProviderAdapter.ProviderAdapterV2TurnInput,
-        disposition: OmpSlashDisposition | undefined,
+        disposition: OmpTurnDisposition | undefined,
         beforeBranch: ReadonlyArray<OmpBranchMessage> | undefined,
       ) {
         const startedAt = yield* DateTime.now;
@@ -3440,6 +3969,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
           slashCommand:
             disposition !== undefined && turnInput.message.text.trimStart().startsWith("/"),
           continuation: disposition === undefined,
+          goalCommand: disposition?.kind === "goal" ? disposition.command : undefined,
           beforeBranch,
           mainPrompt: undefined,
           settlement: undefined,
@@ -3462,14 +3992,26 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         return turn;
       });
 
+      /** omp answers commands in order, so a new objective's drop is answered before its create. */
+      const sendGoalCommands = Effect.fnUntraced(function* (
+        turn: ActiveOmpTurn,
+        command: OrchestrationV2GoalCommand,
+      ) {
+        const hasGoal = (threadState?.providerThread.goal ?? null) !== null;
+        for (const goalCommand of ompGoalCommands(command, hasGoal)) {
+          yield* sendPrompt(turn, "goal", goalCommand);
+        }
+      });
+
       const dispatchTurn = Effect.fnUntraced(function* (
         turn: ActiveOmpTurn,
-        disposition: OmpSlashDisposition | undefined,
+        disposition: OmpTurnDisposition | undefined,
         payload: OmpPromptPayload | null,
       ) {
         if (disposition?.kind === "compact") {
           return yield* sendPrompt(turn, "compact", compactCommand(disposition));
         }
+        if (disposition?.kind === "goal") return yield* sendGoalCommands(turn, disposition.command);
         if (payload !== null) {
           yield* sendPrompt(turn, "turn_start", promptCommand(payload, "followUp"));
         }
@@ -3488,7 +4030,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
 
       const settleWithoutPrompt = Effect.fnUntraced(function* (
         turn: ActiveOmpTurn,
-        disposition: OmpSlashDisposition | undefined,
+        disposition: OmpTurnDisposition | undefined,
         wake: OmpWake | null,
       ) {
         for (const record of wake?.records ?? []) yield* handleRecord(record);
@@ -3524,7 +4066,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
       const installTurn = Effect.fnUntraced(function* (
         state: OmpThreadState,
         turn: ActiveOmpTurn,
-        disposition: OmpSlashDisposition | undefined,
+        disposition: OmpTurnDisposition | undefined,
         payload: OmpPromptPayload | null,
         sessionFile: string | null | undefined,
       ) {
@@ -3540,6 +4082,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         state.providerThread = {
           ...turnInput.providerThread,
           nativeThreadRef: state.providerThread.nativeThreadRef,
+          goal: state.providerThread.goal ?? null,
         };
         state.activeTurn = turn;
         turn.adoptedWake = wake !== null;
@@ -3577,6 +4120,16 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         return thread?.nativeThreadRef?.nativeId;
       });
 
+      // omp has no `/goal` over RPC, so T3 runs it through omp's `goal` command.
+      const turnDisposition = (
+        turnInput: ProviderAdapter.ProviderAdapterV2TurnInput,
+      ): OmpTurnDisposition => {
+        const goalCommand = ompGoalCommandOf(turnInput);
+        return goalCommand === null
+          ? classifyOmpSlashInput(turnInput.message.text, commandCatalogNames)
+          : { kind: "goal", command: goalCommand };
+      };
+
       const prepareTurn = Effect.fnUntraced(function* (
         turnInput: ProviderAdapter.ProviderAdapterV2TurnInput,
         continuation: boolean,
@@ -3585,9 +4138,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
           ? turnInput.providerThread.nativeThreadRef?.nativeId
           : yield* applyTurnSettings(turnInput);
         yield* applySessionName(turnInput.appThread.title);
-        const disposition = continuation
-          ? undefined
-          : classifyOmpSlashInput(turnInput.message.text, commandCatalogNames);
+        const disposition = continuation ? undefined : turnDisposition(turnInput);
         // Resolve attachments before turn installation so failures cannot strand activeTurn.
         const payload =
           disposition?.kind === "send"
@@ -3741,8 +4292,9 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
 
       /**
        * abort leaves detached subagents running, and their commands run in sessions of their own,
-       * outside the process group T3 signals when it ends omp. omp answers commands one at a time
-       * and a cancel only once its child stopped, so each waits for the one before.
+       * outside the process group T3 signals when it ends omp. omp runs commands one at a time and
+       * answers a cancel only once its child stopped, so every cancel is sent at once: omp still
+       * cancels the rest after Stop stops waiting (UP/modes/rpc/rpc-mode.ts:604-661).
        */
       const cancelSubagents = Effect.gen(function* () {
         const listed = yield* request({ type: "get_subagents" }, OMP_SHORT_REQUEST_TIMEOUT_MS).pipe(
@@ -3750,12 +4302,15 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
           Effect.orElseSucceed(() => Option.none<typeof OmpSubagentList.Type>()),
         );
         if (Option.isNone(listed)) return;
-        for (const child of listed.value.subagents) {
-          yield* request(
-            { type: "cancel_subagent", subagentId: child.id },
-            OMP_SUBAGENT_CANCEL_TIMEOUT_MS,
-          ).pipe(Effect.ignore);
-        }
+        yield* Effect.forEach(
+          listed.value.subagents,
+          (child) =>
+            request(
+              { type: "cancel_subagent", subagentId: child.id },
+              OMP_SUBAGENT_CANCEL_TIMEOUT_MS,
+            ).pipe(Effect.ignore),
+          { concurrency: "unbounded", discard: true },
+        );
       });
 
       const stopDeadline = Clock.currentTimeMillis.pipe(
@@ -3859,6 +4414,16 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         yield* untilDeadline(yield* stopDeadline, cancelSubagents);
       });
 
+      /**
+       * Stop pauses an active goal. omp pauses one itself only when the abort ends a run, not
+       * between the runs it starts for the goal. A restart pauses it when omp reopens the session.
+       */
+      const pauseActiveGoal = Effect.suspend(() =>
+        threadState?.providerThread.goal?.status === "active"
+          ? request({ type: "goal", op: "pause" }, OMP_SHORT_REQUEST_TIMEOUT_MS).pipe(Effect.ignore)
+          : Effect.void,
+      );
+
       const interruptTurn = Effect.fn("OmpAdapter.interruptTurn")(
         function* (interruptInput: ProviderAdapter.ProviderAdapterV2InterruptInput) {
           const turn = threadState?.activeTurn ?? null;
@@ -3870,6 +4435,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
           turn.interrupted = true;
           if (restart || compactCommandRunning(turn)) return yield* stopForRestart(turn);
           yield* abortTurn(turn);
+          yield* pauseActiveGoal;
         },
         (effect, interruptInput) =>
           effect.pipe(
@@ -3989,7 +4555,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
         const threadId = state.providerThread.appThreadId ?? input.threadId;
         return (Array.isArray(messages) ? messages : []).flatMap((message, index) => {
           const role = snapshotRole(message);
-          const text = contentText(ompRecordField(message, "content"));
+          const text = ompContentText(ompRecordField(message, "content"));
           if (role === undefined || text.length === 0) return [];
           const at = Option.getOrElse(
             DateTime.make(ompRecordNumber(message, "timestamp") ?? Number.NaN),
@@ -4060,22 +4626,30 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (
           ),
       );
 
-      /** `branch` writes a new file and leaves the original untouched (R§40). */
+      /**
+       * `branch` writes a new file and leaves the original untouched (R§40). omp keeps only a goal
+       * the kept entries journaled and reports it only in get_state, so a rewind replaces it.
+       */
       const branchSession = Effect.fnUntraced(function* (state: OmpThreadState, entryId: string) {
         const result = yield* lifecycleRequest({ type: "branch", entryId });
         if (Option.getOrUndefined(decodeBranchResult(result))?.cancelled === true) {
           return yield* protocolError("An omp extension cancelled the rollback branch");
         }
-        const live = Option.getOrUndefined(yield* readState(OMP_LIFECYCLE_TIMEOUT_MS));
+        const data = yield* request({ type: "get_state" }, OMP_LIFECYCLE_TIMEOUT_MS).pipe(
+          Effect.orElseSucceed(() => undefined),
+        );
+        const live = Option.getOrUndefined(decodeSessionState(data));
         if (live?.sessionFile === undefined) {
           return yield* protocolError("omp rollback did not report its session file");
         }
+        const goal = ompGoalFromState(ompRecordField(data, "goal"));
         forgetSessionSelections();
         lastBranchMessages = yield* readBranchMessages();
         yield* sessionEventPermit.withPermits(1)(
           updateProviderThread(state, {
             nativeThreadRef: providerRef(live.sessionFile),
             nativeConversationHeadRef: null,
+            ...(goal === undefined ? {} : { goal }),
           }),
         );
       });

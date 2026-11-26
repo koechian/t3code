@@ -110,7 +110,7 @@ it.layer(layerTest)("OmpDriver workspace discovery", (it) => {
       );
       assert.deepEqual(
         first.slashCommands.map((command) => command.name),
-        ["prompt-first"],
+        ["prompt-first", "goal"],
       );
       const machine = yield* instance.snapshot.getSnapshot;
       assert.equal(machine.status, "ready");

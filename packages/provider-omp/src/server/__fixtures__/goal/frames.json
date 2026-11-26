@@ -1,0 +1,1460 @@
+{
+  "//": "omp 19.1.1 goal frames with Haiku 5.5. budgetLimited: phase2/goal-budget-limited.jsonl:10-11 (create), 12-76 (the run omp starts on its own; agent_end messages and turn_end bodies cut), 78 (get), 82-84 (drop). lifecycle: subagents-todos-goal/06-goal-lifecycle-default-no-rpc-continuation.jsonl:12 (pause with no goal), 17 (create refused), 21-23 (pause), 25 (get_state goal), 27-28 (resume). complete: phase2/queue-prompt-during-autonomous-run.jsonl:64, 91. abortPauses: subagents-todos-goal/10-goal-rpc-continuation-abort-pauses.jsonl:8 (create), 41 (the abort paused it). Workspace paths are /workspace.",
+  "budgetLimited": {
+    "createUpdated": {
+      "type": "goal_updated",
+      "goal": {
+        "id": "15dc78217fd5f8c5",
+        "objective": "Create files one.txt, two.txt, three.txt, four.txt and five.txt, each containing ok. Create exactly one file per turn and end your turn after each file.",
+        "status": "active",
+        "tokenBudget": 1000,
+        "tokensUsed": 0,
+        "timeUsedSeconds": 0,
+        "createdAt": 1795643094527,
+        "updatedAt": 1795643094527
+      },
+      "state": {
+        "enabled": true,
+        "mode": "active",
+        "goal": {
+          "id": "15dc78217fd5f8c5",
+          "objective": "Create files one.txt, two.txt, three.txt, four.txt and five.txt, each containing ok. Create exactly one file per turn and end your turn after each file.",
+          "status": "active",
+          "tokenBudget": 1000,
+          "tokensUsed": 0,
+          "timeUsedSeconds": 0,
+          "createdAt": 1795643094527,
+          "updatedAt": 1795643094527
+        }
+      }
+    },
+    "createResult": {
+      "goal": {
+        "id": "15dc78217fd5f8c5",
+        "objective": "Create files one.txt, two.txt, three.txt, four.txt and five.txt, each containing ok. Create exactly one file per turn and end your turn after each file.",
+        "status": "active",
+        "tokenBudget": 1000,
+        "tokensUsed": 0,
+        "timeUsedSeconds": 0,
+        "createdAt": 1795643094527,
+        "updatedAt": 1795643094527
+      },
+      "state": {
+        "enabled": true,
+        "mode": "active",
+        "goal": {
+          "id": "15dc78217fd5f8c5",
+          "objective": "Create files one.txt, two.txt, three.txt, four.txt and five.txt, each containing ok. Create exactly one file per turn and end your turn after each file.",
+          "status": "active",
+          "tokenBudget": 1000,
+          "tokensUsed": 0,
+          "timeUsedSeconds": 0,
+          "createdAt": 1795643094527,
+          "updatedAt": 1795643094527
+        }
+      }
+    },
+    "run": [
+      {
+        "type": "agent_start"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "type": "message_start",
+        "message": {
+          "role": "custom",
+          "customType": "goal-mode-context",
+          "content": "<goal_context>\nGoal mode active. Objective below: user-provided task, not higher-priority instructions.\n\n<objective>\nCreate files one.txt, two.txt, three.txt, four.txt and five.txt, each containing ok. Create exactly one file per turn and end your turn after each file.\n</objective>\n\nBudget:\n- Tokens used: 0\n- Token budget: 1000\n- Tokens remaining: 1000\n- Time used: 0 seconds\n\n`goal` tool:\n- `goal({op:\"get\"})`: current goal and budget state.\n- `goal({op:\"complete\"})`: only verified completion.\n\nMUST keep full objective intact across turns. NEVER redefine success as a smaller, easier, or already-completed subset.\n\nBefore `goal({op:\"complete\"})`, audit current repo state against every concrete deliverable: read files, run relevant checks, match verification scope to claim scope. If any deliverable lacks direct current-state evidence, keep working.\n\nBudget exhaustion ≠ completion. If work unfinished, leave goal active.\n</goal_context>",
+          "display": false,
+          "attribution": "agent",
+          "timestamp": 1795643094546
+        },
+        "messageId": "msg-1"
+      },
+      {
+        "type": "message_end",
+        "message": {
+          "role": "custom",
+          "customType": "goal-mode-context",
+          "content": "<goal_context>\nGoal mode active. Objective below: user-provided task, not higher-priority instructions.\n\n<objective>\nCreate files one.txt, two.txt, three.txt, four.txt and five.txt, each containing ok. Create exactly one file per turn and end your turn after each file.\n</objective>\n\nBudget:\n- Tokens used: 0\n- Token budget: 1000\n- Tokens remaining: 1000\n- Time used: 0 seconds\n\n`goal` tool:\n- `goal({op:\"get\"})`: current goal and budget state.\n- `goal({op:\"complete\"})`: only verified completion.\n\nMUST keep full objective intact across turns. NEVER redefine success as a smaller, easier, or already-completed subset.\n\nBefore `goal({op:\"complete\"})`, audit current repo state against every concrete deliverable: read files, run relevant checks, match verification scope to claim scope. If any deliverable lacks direct current-state evidence, keep working.\n\nBudget exhaustion ≠ completion. If work unfinished, leave goal active.\n</goal_context>",
+          "display": false,
+          "attribution": "agent",
+          "timestamp": 1795643094546
+        },
+        "messageId": "msg-1"
+      },
+      {
+        "type": "message_start",
+        "message": {
+          "role": "custom",
+          "customType": "goal-continuation",
+          "content": "<!-- Hidden continuation steer. role=user, suppressed from visible transcript. -->\n\nContinue active goal.\n\n<objective>\nCreate files one.txt, two.txt, three.txt, four.txt and five.txt, each containing ok. Create exactly one file per turn and end your turn after each file.\n</objective>\n\nBudget:\n- Tokens used: 0\n- Token budget: 1000\n- Tokens remaining: 1000\n- Time used: 0 seconds\n\nAutonomous continuation; objective persists across turns. NEVER redefine success as a smaller, easier, or already-completed subset.\n\nBefore `goal({op:\"complete\"})`, MUST audit current repo state:\n\n1. Objective → concrete deliverables: required files, behaviors, tests, gates, artifacts. Record in todo or reasoning.\n2. Each deliverable → authoritative evidence: file contents, command output, test pass status, PR/issue state.\n3. Inspect actual current state: read files; run commands/tests. NEVER rely on earlier-session memory — repo may have changed.\n4. Verification scope = claim scope. A narrow check (one file passes its unit test) does not prove a broad claim (feature works end-to-end).\n5. Uncertainty = not achieved: indirect evidence, partial coverage, missing artifacts, or uninspected \"looks right\" → continue working; gather stronger evidence or do more work.\n6. Budget exhaustion ≠ completion. NEVER call complete merely because tokens are nearly out. Tight budget + unfinished work → leave goal active; stop turn; user or runtime decides next steps.\n\nCall `goal({op:\"complete\"})` only when every deliverable has direct current-state evidence proving satisfaction. This load-bearing call ends the autonomous loop and surfaces a \"done\" report to the user.\n\nUnfinished: keep working. NEVER narrate continuation — execute.",
+          "display": false,
+          "attribution": "agent",
+          "timestamp": 1795643094539
+        },
+        "messageId": "msg-2"
+      },
+      {
+        "type": "message_end",
+        "message": {
+          "role": "custom",
+          "customType": "goal-continuation",
+          "content": "<!-- Hidden continuation steer. role=user, suppressed from visible transcript. -->\n\nContinue active goal.\n\n<objective>\nCreate files one.txt, two.txt, three.txt, four.txt and five.txt, each containing ok. Create exactly one file per turn and end your turn after each file.\n</objective>\n\nBudget:\n- Tokens used: 0\n- Token budget: 1000\n- Tokens remaining: 1000\n- Time used: 0 seconds\n\nAutonomous continuation; objective persists across turns. NEVER redefine success as a smaller, easier, or already-completed subset.\n\nBefore `goal({op:\"complete\"})`, MUST audit current repo state:\n\n1. Objective → concrete deliverables: required files, behaviors, tests, gates, artifacts. Record in todo or reasoning.\n2. Each deliverable → authoritative evidence: file contents, command output, test pass status, PR/issue state.\n3. Inspect actual current state: read files; run commands/tests. NEVER rely on earlier-session memory — repo may have changed.\n4. Verification scope = claim scope. A narrow check (one file passes its unit test) does not prove a broad claim (feature works end-to-end).\n5. Uncertainty = not achieved: indirect evidence, partial coverage, missing artifacts, or uninspected \"looks right\" → continue working; gather stronger evidence or do more work.\n6. Budget exhaustion ≠ completion. NEVER call complete merely because tokens are nearly out. Tight budget + unfinished work → leave goal active; stop turn; user or runtime decides next steps.\n\nCall `goal({op:\"complete\"})` only when every deliverable has direct current-state evidence proving satisfaction. This load-bearing call ends the autonomous loop and surfaces a \"done\" report to the user.\n\nUnfinished: keep working. NEVER narrate continuation — execute.",
+          "display": false,
+          "attribution": "agent",
+          "timestamp": 1795643094539
+        },
+        "messageId": "msg-2"
+      },
+      {
+        "type": "message_start",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "I"
+            }
+          ],
+          "api": "anthropic-messages",
+          "provider": "anthropic",
+          "model": "claude-haiku-5-5",
+          "usage": {
+            "input": 2,
+            "output": 1,
+            "cacheRead": 0,
+            "cacheWrite": 13874,
+            "totalTokens": 13877,
+            "cost": {
+              "input": 2.0000000000000002e-7,
+              "output": 5e-7,
+              "cacheRead": 0,
+              "cacheWrite": 0.0027748000000000004,
+              "total": 0.0027755000000000006
+            },
+            "cttl": {
+              "ephemeral1h": 13874
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1795643094573,
+          "requestControls": {
+            "messageIndex": 2,
+            "tools": {
+              "declared": [
+                "read",
+                "bash",
+                "edit",
+                "ask",
+                "eval",
+                "glob",
+                "grep",
+                "task",
+                "wait",
+                "todo",
+                "web_search",
+                "write",
+                "goal"
+              ],
+              "deferred": [],
+              "active": [
+                "read",
+                "bash",
+                "edit",
+                "ask",
+                "eval",
+                "glob",
+                "grep",
+                "task",
+                "wait",
+                "todo",
+                "web_search",
+                "write",
+                "goal"
+              ]
+            },
+            "effort": {
+              "topLevel": null,
+              "tail": null
+            }
+          },
+          "requestId": "<redacted>",
+          "responseId": "<redacted>",
+          "credentialId": 0
+        },
+        "messageId": "msg-3"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_start",
+          "contentIndex": 0,
+          "block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-3"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": "I"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-3"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": "'ll create the"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-3"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": " first file this"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-3"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": " turn."
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-3"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_end",
+          "contentIndex": 0,
+          "content": "I'll create the first file this turn.",
+          "block": {
+            "type": "text"
+          }
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-3"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "toolcall_start",
+          "contentIndex": 1,
+          "block": {
+            "type": "toolCall",
+            "id": "toolu_017g7pQwoSqQHzdNiBcmzf6G",
+            "name": "write",
+            "arguments": {}
+          }
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-3"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "toolcall_delta",
+          "contentIndex": 1,
+          "delta": "{\"path\": \"one"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-3"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "toolcall_delta",
+          "contentIndex": 1,
+          "delta": ".txt"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-3"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "toolcall_delta",
+          "contentIndex": 1,
+          "delta": "\", \"content\": \"ok"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-3"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "toolcall_delta",
+          "contentIndex": 1,
+          "delta": "\"}"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-3"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "toolcall_end",
+          "contentIndex": 1,
+          "toolCall": {
+            "type": "toolCall",
+            "id": "toolu_017g7pQwoSqQHzdNiBcmzf6G",
+            "name": "write",
+            "arguments": {
+              "path": "one.txt",
+              "content": "ok"
+            }
+          }
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-3"
+      },
+      {
+        "type": "message_end",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "I'll create the first file this turn."
+            },
+            {
+              "type": "toolCall",
+              "id": "toolu_017g7pQwoSqQHzdNiBcmzf6G",
+              "name": "write",
+              "arguments": {
+                "path": "one.txt",
+                "content": "ok"
+              }
+            }
+          ],
+          "api": "anthropic-messages",
+          "provider": "anthropic",
+          "model": "claude-haiku-5-5",
+          "usage": {
+            "input": 2,
+            "output": 83,
+            "cacheRead": 0,
+            "cacheWrite": 13874,
+            "totalTokens": 13959,
+            "cost": {
+              "input": 2.0000000000000002e-7,
+              "output": 4.15e-5,
+              "cacheRead": 0,
+              "cacheWrite": 0.0027748000000000004,
+              "total": 0.0028165000000000004
+            },
+            "cttl": {
+              "ephemeral1h": 13874
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1795643094573,
+          "requestControls": {
+            "messageIndex": 2,
+            "tools": {
+              "declared": [
+                "read",
+                "bash",
+                "edit",
+                "ask",
+                "eval",
+                "glob",
+                "grep",
+                "task",
+                "wait",
+                "todo",
+                "web_search",
+                "write",
+                "goal"
+              ],
+              "deferred": [],
+              "active": [
+                "read",
+                "bash",
+                "edit",
+                "ask",
+                "eval",
+                "glob",
+                "grep",
+                "task",
+                "wait",
+                "todo",
+                "web_search",
+                "write",
+                "goal"
+              ]
+            },
+            "effort": {
+              "topLevel": null,
+              "tail": null
+            }
+          },
+          "requestId": "<redacted>",
+          "responseId": "<redacted>",
+          "credentialId": 0,
+          "duration": 1393.5392499999998,
+          "ttft": 1007.323416,
+          "completedAt": 1795643095967
+        },
+        "messageId": "msg-3"
+      },
+      {
+        "type": "tool_execution_start",
+        "toolCallId": "toolu_017g7pQwoSqQHzdNiBcmzf6G",
+        "toolName": "write",
+        "args": {
+          "path": "one.txt",
+          "content": "ok"
+        }
+      },
+      {
+        "type": "tool_execution_update",
+        "toolCallId": "toolu_017g7pQwoSqQHzdNiBcmzf6G",
+        "toolName": "write",
+        "args": {
+          "path": "one.txt",
+          "content": "ok"
+        },
+        "partialResult": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Writing 2 bytes to one.txt..."
+            }
+          ],
+          "details": {
+            "resolvedPath": "/workspace/one.txt"
+          }
+        }
+      },
+      {
+        "type": "tool_execution_end",
+        "toolCallId": "toolu_017g7pQwoSqQHzdNiBcmzf6G",
+        "toolName": "write",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "[one.txt#3AB1]\nSuccessfully wrote 2 bytes to one.txt"
+            }
+          ],
+          "details": {
+            "resolvedPath": "/workspace/one.txt"
+          }
+        },
+        "isError": false
+      },
+      {
+        "type": "message_start",
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "toolu_017g7pQwoSqQHzdNiBcmzf6G",
+          "toolName": "write",
+          "content": [
+            {
+              "type": "text",
+              "text": "[one.txt#3AB1]\nSuccessfully wrote 2 bytes to one.txt"
+            }
+          ],
+          "details": {
+            "resolvedPath": "/workspace/one.txt"
+          },
+          "isError": false,
+          "timestamp": 1795643095984
+        },
+        "messageId": "msg-4"
+      },
+      {
+        "type": "goal_updated",
+        "goal": {
+          "id": "15dc78217fd5f8c5",
+          "objective": "Create files one.txt, two.txt, three.txt, four.txt and five.txt, each containing ok. Create exactly one file per turn and end your turn after each file.",
+          "status": "budget-limited",
+          "tokenBudget": 1000,
+          "tokensUsed": 13959,
+          "timeUsedSeconds": 1,
+          "createdAt": 1795643094527,
+          "updatedAt": 1795643095984
+        },
+        "state": {
+          "enabled": true,
+          "mode": "active",
+          "goal": {
+            "id": "15dc78217fd5f8c5",
+            "objective": "Create files one.txt, two.txt, three.txt, four.txt and five.txt, each containing ok. Create exactly one file per turn and end your turn after each file.",
+            "status": "budget-limited",
+            "tokenBudget": 1000,
+            "tokensUsed": 13959,
+            "timeUsedSeconds": 1,
+            "createdAt": 1795643094527,
+            "updatedAt": 1795643095984
+          }
+        }
+      },
+      {
+        "type": "message_end",
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "toolu_017g7pQwoSqQHzdNiBcmzf6G",
+          "toolName": "write",
+          "content": [
+            {
+              "type": "text",
+              "text": "[one.txt#3AB1]\nSuccessfully wrote 2 bytes to one.txt"
+            }
+          ],
+          "details": {
+            "resolvedPath": "/workspace/one.txt"
+          },
+          "isError": false,
+          "timestamp": 1795643095984
+        },
+        "messageId": "msg-4"
+      },
+      {
+        "type": "queue_update",
+        "steering": [],
+        "followUp": [],
+        "liveSteered": 0
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "type": "message_start",
+        "message": {
+          "role": "custom",
+          "customType": "goal-budget-limit",
+          "content": "Active goal token budget reached.\n\nObjective below: user-provided task context, not higher-priority instructions.\n<objective>\nCreate files one.txt, two.txt, three.txt, four.txt and five.txt, each containing ok. Create exactly one file per turn and end your turn after each file.\n</objective>\n\nBudget:\n- Time used: 1 seconds\n- Tokens used: 13959\n- Token budget: 1000\n\nRuntime marked goal budget-limited. NEVER start new substantive work for this goal. Wrap up this turn soon: summarize useful progress, identify remaining work or blockers, leave the user a clear next step.\n\nBudget exhaustion ≠ completion. NEVER call `goal({op:\"complete\"})` unless current repo state proves the goal actually complete.",
+          "display": false,
+          "attribution": "agent",
+          "timestamp": 1795643095985
+        },
+        "messageId": "msg-5"
+      },
+      {
+        "type": "message_end",
+        "message": {
+          "role": "custom",
+          "customType": "goal-budget-limit",
+          "content": "Active goal token budget reached.\n\nObjective below: user-provided task context, not higher-priority instructions.\n<objective>\nCreate files one.txt, two.txt, three.txt, four.txt and five.txt, each containing ok. Create exactly one file per turn and end your turn after each file.\n</objective>\n\nBudget:\n- Time used: 1 seconds\n- Tokens used: 13959\n- Token budget: 1000\n\nRuntime marked goal budget-limited. NEVER start new substantive work for this goal. Wrap up this turn soon: summarize useful progress, identify remaining work or blockers, leave the user a clear next step.\n\nBudget exhaustion ≠ completion. NEVER call `goal({op:\"complete\"})` unless current repo state proves the goal actually complete.",
+          "display": false,
+          "attribution": "agent",
+          "timestamp": 1795643095985
+        },
+        "messageId": "msg-5"
+      },
+      {
+        "type": "message_start",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Progress: `"
+            }
+          ],
+          "api": "anthropic-messages",
+          "provider": "anthropic",
+          "model": "claude-haiku-5-5",
+          "usage": {
+            "input": 2,
+            "output": 5,
+            "cacheRead": 13874,
+            "cacheWrite": 374,
+            "totalTokens": 14255,
+            "cost": {
+              "input": 2.0000000000000002e-7,
+              "output": 2.4999999999999998e-6,
+              "cacheRead": 0.00013874,
+              "cacheWrite": 7.48e-5,
+              "total": 0.00021624
+            },
+            "cttl": {
+              "ephemeral1h": 374
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1795643095993,
+          "requestControls": {
+            "messageIndex": 5,
+            "tools": {
+              "declared": [
+                "read",
+                "bash",
+                "edit",
+                "ask",
+                "eval",
+                "glob",
+                "grep",
+                "task",
+                "wait",
+                "todo",
+                "web_search",
+                "write",
+                "goal"
+              ],
+              "deferred": [],
+              "active": [
+                "read",
+                "bash",
+                "edit",
+                "ask",
+                "eval",
+                "glob",
+                "grep",
+                "task",
+                "wait",
+                "todo",
+                "web_search",
+                "write",
+                "goal"
+              ]
+            },
+            "effort": {
+              "topLevel": null,
+              "tail": null
+            }
+          },
+          "requestId": "<redacted>",
+          "responseId": "<redacted>",
+          "credentialId": 0
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_start",
+          "contentIndex": 0,
+          "block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": "Progress: `"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": "one.txt` created with"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": " `"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": "ok`"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": " (2 bytes,"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": " conf"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": "irmed by"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": " write tool).\n\nRema"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": "ining work"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": ": `two.txt`,"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": " `three.txt`, `"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": "four.txt`, `five"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": ".txt`, each contain"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": "ing `ok`, one per"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": " turn. The goal is not"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": " complete,"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": " so I have"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": " not mar"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": "ked it so"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": ". Next step"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": ": res"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": "ume the go"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": "al to"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": " create `two.txt`"
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": "."
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_end",
+          "contentIndex": 0,
+          "content": "Progress: `one.txt` created with `ok` (2 bytes, confirmed by write tool).\n\nRemaining work: `two.txt`, `three.txt`, `four.txt`, `five.txt`, each containing `ok`, one per turn. The goal is not complete, so I have not marked it so. Next step: resume the goal to create `two.txt`.",
+          "block": {
+            "type": "text"
+          }
+        },
+        "message": {
+          "role": "assistant"
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "message_end",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Progress: `one.txt` created with `ok` (2 bytes, confirmed by write tool).\n\nRemaining work: `two.txt`, `three.txt`, `four.txt`, `five.txt`, each containing `ok`, one per turn. The goal is not complete, so I have not marked it so. Next step: resume the goal to create `two.txt`."
+            }
+          ],
+          "api": "anthropic-messages",
+          "provider": "anthropic",
+          "model": "claude-haiku-5-5",
+          "usage": {
+            "input": 2,
+            "output": 117,
+            "cacheRead": 13874,
+            "cacheWrite": 374,
+            "totalTokens": 14367,
+            "cost": {
+              "input": 2.0000000000000002e-7,
+              "output": 5.85e-5,
+              "cacheRead": 0.00013874,
+              "cacheWrite": 7.48e-5,
+              "total": 0.00027224
+            },
+            "cttl": {
+              "ephemeral1h": 374
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1795643095993,
+          "requestControls": {
+            "messageIndex": 5,
+            "tools": {
+              "declared": [
+                "read",
+                "bash",
+                "edit",
+                "ask",
+                "eval",
+                "glob",
+                "grep",
+                "task",
+                "wait",
+                "todo",
+                "web_search",
+                "write",
+                "goal"
+              ],
+              "deferred": [],
+              "active": [
+                "read",
+                "bash",
+                "edit",
+                "ask",
+                "eval",
+                "glob",
+                "grep",
+                "task",
+                "wait",
+                "todo",
+                "web_search",
+                "write",
+                "goal"
+              ]
+            },
+            "effort": {
+              "topLevel": null,
+              "tail": null
+            }
+          },
+          "requestId": "<redacted>",
+          "responseId": "<redacted>",
+          "credentialId": 0,
+          "duration": 1040.264542,
+          "ttft": 526.8880829999998,
+          "completedAt": 1795643097033
+        },
+        "messageId": "msg-6"
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "type": "goal_updated",
+        "goal": {
+          "id": "15dc78217fd5f8c5",
+          "objective": "Create files one.txt, two.txt, three.txt, four.txt and five.txt, each containing ok. Create exactly one file per turn and end your turn after each file.",
+          "status": "budget-limited",
+          "tokenBudget": 1000,
+          "tokensUsed": 14452,
+          "timeUsedSeconds": 2,
+          "createdAt": 1795643094527,
+          "updatedAt": 1795643097036
+        },
+        "state": {
+          "enabled": true,
+          "mode": "active",
+          "goal": {
+            "id": "15dc78217fd5f8c5",
+            "objective": "Create files one.txt, two.txt, three.txt, four.txt and five.txt, each containing ok. Create exactly one file per turn and end your turn after each file.",
+            "status": "budget-limited",
+            "tokenBudget": 1000,
+            "tokensUsed": 14452,
+            "timeUsedSeconds": 2,
+            "createdAt": 1795643094527,
+            "updatedAt": 1795643097036
+          }
+        }
+      },
+      {
+        "type": "agent_end",
+        "messages": [],
+        "isTerminal": true,
+        "yielded": true
+      },
+      {
+        "type": "extension_ui_request",
+        "id": "15dc7823f3d5f8c7",
+        "method": "setWidget",
+        "widgetKey": "autoresearch"
+      },
+      {
+        "type": "session_settled"
+      }
+    ],
+    "getResult": {
+      "goal": {
+        "id": "15dc78217fd5f8c5",
+        "objective": "Create files one.txt, two.txt, three.txt, four.txt and five.txt, each containing ok. Create exactly one file per turn and end your turn after each file.",
+        "status": "budget-limited",
+        "tokenBudget": 1000,
+        "tokensUsed": 14452,
+        "timeUsedSeconds": 2,
+        "createdAt": 1795643094527,
+        "updatedAt": 1795643097036
+      },
+      "state": {
+        "enabled": true,
+        "mode": "active",
+        "goal": {
+          "id": "15dc78217fd5f8c5",
+          "objective": "Create files one.txt, two.txt, three.txt, four.txt and five.txt, each containing ok. Create exactly one file per turn and end your turn after each file.",
+          "status": "budget-limited",
+          "tokenBudget": 1000,
+          "tokensUsed": 14452,
+          "timeUsedSeconds": 2,
+          "createdAt": 1795643094527,
+          "updatedAt": 1795643097036
+        }
+      }
+    },
+    "dropUpdates": [
+      {
+        "type": "goal_updated",
+        "goal": {
+          "id": "15dc78217fd5f8c5",
+          "objective": "Create files one.txt, two.txt, three.txt, four.txt and five.txt, each containing ok. Create exactly one file per turn and end your turn after each file.",
+          "status": "budget-limited",
+          "tokenBudget": 1000,
+          "tokensUsed": 14452,
+          "timeUsedSeconds": 4,
+          "createdAt": 1795643094527,
+          "updatedAt": 1795643099053
+        },
+        "state": {
+          "enabled": true,
+          "mode": "active",
+          "goal": {
+            "id": "15dc78217fd5f8c5",
+            "objective": "Create files one.txt, two.txt, three.txt, four.txt and five.txt, each containing ok. Create exactly one file per turn and end your turn after each file.",
+            "status": "budget-limited",
+            "tokenBudget": 1000,
+            "tokensUsed": 14452,
+            "timeUsedSeconds": 4,
+            "createdAt": 1795643094527,
+            "updatedAt": 1795643099053
+          }
+        }
+      },
+      {
+        "type": "goal_updated",
+        "goal": {
+          "id": "15dc78217fd5f8c5",
+          "objective": "Create files one.txt, two.txt, three.txt, four.txt and five.txt, each containing ok. Create exactly one file per turn and end your turn after each file.",
+          "status": "dropped",
+          "tokenBudget": 1000,
+          "tokensUsed": 14452,
+          "timeUsedSeconds": 4,
+          "createdAt": 1795643094527,
+          "updatedAt": 1795643099053
+        },
+        "state": {
+          "enabled": false,
+          "mode": "active",
+          "goal": {
+            "id": "15dc78217fd5f8c5",
+            "objective": "Create files one.txt, two.txt, three.txt, four.txt and five.txt, each containing ok. Create exactly one file per turn and end your turn after each file.",
+            "status": "dropped",
+            "tokenBudget": 1000,
+            "tokensUsed": 14452,
+            "timeUsedSeconds": 4,
+            "createdAt": 1795643094527,
+            "updatedAt": 1795643099053
+          }
+        }
+      }
+    ],
+    "dropResult": {
+      "goal": null,
+      "state": null
+    }
+  },
+  "lifecycle": {
+    "noGoalResult": {
+      "goal": null,
+      "state": null
+    },
+    "createRefusedError": "A goal is already active. Drop it before creating another.",
+    "pauseUpdates": [
+      {
+        "type": "goal_updated",
+        "goal": {
+          "id": "15dbc49a9e1e5602",
+          "objective": "Create a file named goal.txt containing the word ok.",
+          "status": "active",
+          "tokenBudget": 60000,
+          "tokensUsed": 0,
+          "timeUsedSeconds": 4,
+          "createdAt": 1795596032632,
+          "updatedAt": 1795596036670
+        },
+        "state": {
+          "enabled": true,
+          "mode": "active",
+          "goal": {
+            "id": "15dbc49a9e1e5602",
+            "objective": "Create a file named goal.txt containing the word ok.",
+            "status": "active",
+            "tokenBudget": 60000,
+            "tokensUsed": 0,
+            "timeUsedSeconds": 4,
+            "createdAt": 1795596032632,
+            "updatedAt": 1795596036670
+          }
+        }
+      },
+      {
+        "type": "goal_updated",
+        "goal": {
+          "id": "15dbc49a9e1e5602",
+          "objective": "Create a file named goal.txt containing the word ok.",
+          "status": "paused",
+          "tokenBudget": 60000,
+          "tokensUsed": 0,
+          "timeUsedSeconds": 4,
+          "createdAt": 1795596032632,
+          "updatedAt": 1795596036670
+        },
+        "state": {
+          "enabled": false,
+          "mode": "active",
+          "goal": {
+            "id": "15dbc49a9e1e5602",
+            "objective": "Create a file named goal.txt containing the word ok.",
+            "status": "paused",
+            "tokenBudget": 60000,
+            "tokensUsed": 0,
+            "timeUsedSeconds": 4,
+            "createdAt": 1795596032632,
+            "updatedAt": 1795596036670
+          }
+        }
+      }
+    ],
+    "pauseResult": {
+      "goal": {
+        "id": "15dbc49a9e1e5602",
+        "objective": "Create a file named goal.txt containing the word ok.",
+        "status": "paused",
+        "tokenBudget": 60000,
+        "tokensUsed": 0,
+        "timeUsedSeconds": 4,
+        "createdAt": 1795596032632,
+        "updatedAt": 1795596036670
+      },
+      "state": {
+        "enabled": false,
+        "mode": "active",
+        "goal": {
+          "id": "15dbc49a9e1e5602",
+          "objective": "Create a file named goal.txt containing the word ok.",
+          "status": "paused",
+          "tokenBudget": 60000,
+          "tokensUsed": 0,
+          "timeUsedSeconds": 4,
+          "createdAt": 1795596032632,
+          "updatedAt": 1795596036670
+        }
+      }
+    },
+    "pausedStateGoal": {
+      "enabled": false,
+      "mode": "active",
+      "goal": {
+        "id": "15dbc49a9e1e5602",
+        "objective": "Create a file named goal.txt containing the word ok.",
+        "status": "paused",
+        "tokenBudget": 60000,
+        "tokensUsed": 0,
+        "timeUsedSeconds": 4,
+        "createdAt": 1795596032632,
+        "updatedAt": 1795596036670
+      }
+    },
+    "resumeUpdated": {
+      "type": "goal_updated",
+      "goal": {
+        "id": "15dbc49a9e1e5602",
+        "objective": "Create a file named goal.txt containing the word ok.",
+        "status": "active",
+        "tokenBudget": 60000,
+        "tokensUsed": 0,
+        "timeUsedSeconds": 4,
+        "createdAt": 1795596032632,
+        "updatedAt": 1795596036688
+      },
+      "state": {
+        "enabled": true,
+        "mode": "active",
+        "goal": {
+          "id": "15dbc49a9e1e5602",
+          "objective": "Create a file named goal.txt containing the word ok.",
+          "status": "active",
+          "tokenBudget": 60000,
+          "tokensUsed": 0,
+          "timeUsedSeconds": 4,
+          "createdAt": 1795596032632,
+          "updatedAt": 1795596036688
+        }
+      }
+    },
+    "resumeResult": {
+      "goal": {
+        "id": "15dbc49a9e1e5602",
+        "objective": "Create a file named goal.txt containing the word ok.",
+        "status": "active",
+        "tokenBudget": 60000,
+        "tokensUsed": 0,
+        "timeUsedSeconds": 4,
+        "createdAt": 1795596032632,
+        "updatedAt": 1795596036688
+      },
+      "state": {
+        "enabled": true,
+        "mode": "active",
+        "goal": {
+          "id": "15dbc49a9e1e5602",
+          "objective": "Create a file named goal.txt containing the word ok.",
+          "status": "active",
+          "tokenBudget": 60000,
+          "tokensUsed": 0,
+          "timeUsedSeconds": 4,
+          "createdAt": 1795596032632,
+          "updatedAt": 1795596036688
+        }
+      }
+    }
+  },
+  "complete": {
+    "completeUpdated": {
+      "type": "goal_updated",
+      "goal": {
+        "id": "15dc783cd3077bdf",
+        "objective": "Run the bash command `sleep 3`, then mark this goal complete with the goal tool and reply with the single word: ok.",
+        "status": "complete",
+        "tokenBudget": 60000,
+        "tokensUsed": 1430,
+        "timeUsedSeconds": 5,
+        "createdAt": 1795643122508,
+        "updatedAt": 1795643127614
+      },
+      "state": {
+        "enabled": false,
+        "mode": "exiting",
+        "goal": {
+          "id": "15dc783cd3077bdf",
+          "objective": "Run the bash command `sleep 3`, then mark this goal complete with the goal tool and reply with the single word: ok.",
+          "status": "complete",
+          "tokenBudget": 60000,
+          "tokensUsed": 1430,
+          "timeUsedSeconds": 5,
+          "createdAt": 1795643122508,
+          "updatedAt": 1795643127614
+        },
+        "reason": "completed"
+      }
+    },
+    "getResult": {
+      "goal": null,
+      "state": null
+    }
+  },
+  "abortPauses": {
+    "activeUpdated": {
+      "type": "goal_updated",
+      "goal": {
+        "id": "15dbc5d0eb2648cc",
+        "objective": "Run `sleep 20` with bash, then create d.txt containing ok.",
+        "status": "active",
+        "tokenBudget": 30000,
+        "tokensUsed": 0,
+        "timeUsedSeconds": 0,
+        "createdAt": 1795596350380,
+        "updatedAt": 1795596350380
+      },
+      "state": {
+        "enabled": true,
+        "mode": "active",
+        "goal": {
+          "id": "15dbc5d0eb2648cc",
+          "objective": "Run `sleep 20` with bash, then create d.txt containing ok.",
+          "status": "active",
+          "tokenBudget": 30000,
+          "tokensUsed": 0,
+          "timeUsedSeconds": 0,
+          "createdAt": 1795596350380,
+          "updatedAt": 1795596350380
+        }
+      }
+    },
+    "pausedUpdated": {
+      "type": "goal_updated",
+      "goal": {
+        "id": "15dbc5d0eb2648cc",
+        "objective": "Run `sleep 20` with bash, then create d.txt containing ok.",
+        "status": "paused",
+        "tokenBudget": 30000,
+        "tokensUsed": 1245,
+        "timeUsedSeconds": 2,
+        "createdAt": 1795596350380,
+        "updatedAt": 1795596353176
+      },
+      "state": {
+        "enabled": false,
+        "mode": "active",
+        "goal": {
+          "id": "15dbc5d0eb2648cc",
+          "objective": "Run `sleep 20` with bash, then create d.txt containing ok.",
+          "status": "paused",
+          "tokenBudget": 30000,
+          "tokensUsed": 1245,
+          "timeUsedSeconds": 2,
+          "createdAt": 1795596350380,
+          "updatedAt": 1795596353176
+        }
+      }
+    }
+  }
+}
